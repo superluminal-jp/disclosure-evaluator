@@ -28,3 +28,8 @@ Thumbs.db
 *.json
 !criteria/*.json
 !sample.json
+outputs/
+
+# Environment variables
+.env
+!.env.example
