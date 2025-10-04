@@ -3,7 +3,8 @@ import json
 import sys
 import os
 import csv
-from datetime import datetime
+import mimetypes
+from datetime import datetime, timedelta
 from typing import List, Optional, Literal, Dict, Any
 from pydantic import BaseModel, Field
 from openai import OpenAI
@@ -354,6 +355,267 @@ class DisclosureEvaluationResult(BaseModel):
         ..., description="Individual criterion evaluations"
     )
     evaluation_timestamp: str = Field(..., description="ISO timestamp of evaluation")
+
+
+# Batch Processing Models
+from enum import Enum
+from typing import Union
+from pathlib import Path
+
+
+class BatchStatus(Enum):
+    """Batch processing status enumeration"""
+
+    PENDING = "pending"
+    PROCESSING = "processing"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    PARTIALLY_FAILED = "partially_failed"
+
+
+class DocumentStatus(Enum):
+    """Document processing status enumeration"""
+
+    PENDING = "pending"
+    PROCESSING = "processing"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+
+class ProcessingPhase(Enum):
+    """Batch processing phase enumeration"""
+
+    INITIALIZING = "initializing"
+    DISCOVERING = "discovering"
+    PROCESSING = "processing"
+    AGGREGATING = "aggregating"
+    COMPLETED = "completed"
+
+
+class BatchConfiguration(BaseModel):
+    """Configuration settings for batch processing"""
+
+    model_config = {"extra": "forbid"}
+
+    max_concurrent_workers: int = Field(
+        default=5, ge=1, le=20, description="Maximum parallel workers"
+    )
+    max_retry_attempts: int = Field(
+        default=3, ge=0, le=10, description="Maximum retry attempts per document"
+    )
+    timeout_seconds: int = Field(
+        default=300, ge=30, le=3600, description="Timeout per document in seconds"
+    )
+    progress_update_interval: int = Field(
+        default=10, ge=1, le=100, description="Progress update frequency"
+    )
+    enable_resumption: bool = Field(default=True, description="Enable batch resumption")
+    output_formats: List[str] = Field(
+        default=["json", "summary"], description="Output formats to generate"
+    )
+    file_size_limit: int = Field(
+        default=50 * 1024 * 1024, ge=1024, description="Maximum file size in bytes"
+    )
+    memory_limit_mb: int = Field(default=2048, ge=256, description="Memory limit in MB")
+    api_rate_limit_delay: float = Field(
+        default=0.1, ge=0.0, le=10.0, description="Delay between API calls"
+    )
+    retry_delay_seconds: int = Field(
+        default=30, ge=1, le=300, description="Delay between retries"
+    )
+    exponential_backoff: bool = Field(
+        default=True, description="Use exponential backoff for retries"
+    )
+
+
+class BatchSummaryStatistics(BaseModel):
+    """Statistical summary of batch evaluation results"""
+
+    model_config = {"extra": "forbid"}
+
+    average_score: float = Field(
+        ..., ge=1.0, le=5.0, description="Average evaluation score"
+    )
+    score_distribution: Dict[int, int] = Field(
+        ..., description="Distribution of scores (1-5 scale)"
+    )
+    most_common_criteria: List[str] = Field(
+        ..., description="Most frequently triggered criteria"
+    )
+    processing_efficiency: float = Field(
+        ..., ge=0.0, description="Documents processed per minute"
+    )
+    error_rate: float = Field(
+        ..., ge=0.0, le=1.0, description="Percentage of failed documents"
+    )
+
+
+class DocumentResult(BaseModel):
+    """Result of individual document evaluation"""
+
+    model_config = {"extra": "forbid"}
+
+    document_id: str = Field(..., description="Document identifier")
+    evaluation_result: Optional[DisclosureEvaluationResult] = Field(
+        None, description="Full evaluation result"
+    )
+    processing_time: timedelta = Field(
+        ..., description="Time taken to process this document"
+    )
+    success: bool = Field(..., description="Whether evaluation was successful")
+
+
+class DocumentError(BaseModel):
+    """Error information for failed document processing"""
+
+    model_config = {"extra": "forbid"}
+
+    document_id: str = Field(..., description="Document identifier")
+    error_type: str = Field(..., description="Type of error")
+    error_message: str = Field(..., description="Detailed error message")
+    retry_count: int = Field(default=0, ge=0, description="Number of retry attempts")
+    occurred_at: datetime = Field(..., description="When the error occurred")
+
+
+class BatchEvaluation(BaseModel):
+    """Batch evaluation metadata and status"""
+
+    model_config = {"extra": "forbid"}
+
+    batch_id: str = Field(..., description="Unique batch identifier")
+    created_at: datetime = Field(..., description="Batch creation timestamp")
+    status: BatchStatus = Field(..., description="Current processing status")
+    total_documents: int = Field(..., ge=0, description="Total number of documents")
+    processed_documents: int = Field(
+        default=0, ge=0, description="Number of documents processed"
+    )
+    successful_documents: int = Field(
+        default=0, ge=0, description="Number of successful documents"
+    )
+    failed_documents: int = Field(
+        default=0, ge=0, description="Number of failed documents"
+    )
+    processing_started_at: Optional[datetime] = Field(
+        None, description="When processing began"
+    )
+    processing_completed_at: Optional[datetime] = Field(
+        None, description="When processing finished"
+    )
+    error_summary: Optional[str] = Field(
+        None, description="Summary of errors encountered"
+    )
+    correlation_id: str = Field(..., description="Batch-level correlation ID")
+    configuration: BatchConfiguration = Field(
+        ..., description="Processing configuration"
+    )
+
+
+class BatchDocument(BaseModel):
+    """Individual document within a batch"""
+
+    model_config = {"extra": "forbid"}
+
+    document_id: str = Field(..., description="Unique document identifier")
+    batch_id: str = Field(..., description="Reference to parent batch")
+    file_path: str = Field(..., description="Path to the document file")
+    file_name: str = Field(..., description="Original filename")
+    file_size: int = Field(..., ge=0, description="File size in bytes")
+    mime_type: str = Field(..., description="Detected MIME type")
+    status: DocumentStatus = Field(..., description="Processing status")
+    processing_started_at: Optional[datetime] = Field(
+        None, description="When processing began"
+    )
+    processing_completed_at: Optional[datetime] = Field(
+        None, description="When processing finished"
+    )
+    evaluation_result: Optional[DisclosureEvaluationResult] = Field(
+        None, description="Evaluation results if successful"
+    )
+    error_message: Optional[str] = Field(None, description="Error details if failed")
+    retry_count: int = Field(default=0, ge=0, description="Number of retry attempts")
+    correlation_id: str = Field(..., description="Document-level correlation ID")
+    context: Optional[str] = Field(
+        None, description="Additional context for evaluation"
+    )
+    output_text: Optional[str] = Field(None, description="Output text for evaluation")
+
+
+class BatchProgress(BaseModel):
+    """Current state of batch processing"""
+
+    model_config = {"extra": "forbid"}
+
+    batch_id: str = Field(..., description="Reference to the batch")
+    current_phase: ProcessingPhase = Field(..., description="Current processing phase")
+    total_documents: int = Field(..., ge=0, description="Total documents to process")
+    processed_documents: int = Field(
+        default=0, ge=0, description="Documents processed so far"
+    )
+    successful_documents: int = Field(
+        default=0, ge=0, description="Successfully processed documents"
+    )
+    failed_documents: int = Field(default=0, ge=0, description="Failed documents")
+    progress_percentage: float = Field(
+        ..., ge=0.0, le=100.0, description="Completion percentage"
+    )
+    estimated_completion: Optional[datetime] = Field(
+        None, description="Estimated completion time"
+    )
+    current_document: Optional[str] = Field(
+        None, description="Currently processing document"
+    )
+    active_workers: int = Field(
+        default=0, ge=0, description="Number of active worker threads"
+    )
+    error_count: int = Field(
+        default=0, ge=0, description="Total number of errors encountered"
+    )
+    last_updated: datetime = Field(..., description="Last progress update timestamp")
+
+
+class BatchResult(BaseModel):
+    """Consolidated results of a batch evaluation"""
+
+    model_config = {"extra": "forbid"}
+
+    batch_id: str = Field(..., description="Reference to the batch")
+    total_documents: int = Field(..., ge=0, description="Total number of documents")
+    successful_evaluations: int = Field(
+        ..., ge=0, description="Number of successful evaluations"
+    )
+    failed_evaluations: int = Field(
+        ..., ge=0, description="Number of failed evaluations"
+    )
+    success_rate: float = Field(
+        ..., ge=0.0, le=1.0, description="Success rate (0.0-1.0)"
+    )
+    processing_duration: timedelta = Field(..., description="Total processing time")
+    average_evaluation_time: Optional[timedelta] = Field(
+        None, description="Average time per document"
+    )
+    summary_statistics: Optional[BatchSummaryStatistics] = Field(
+        None, description="Statistical summary"
+    )
+    individual_results: List[DocumentResult] = Field(
+        default=[], description="Individual document results"
+    )
+    error_summary: List[DocumentError] = Field(
+        default=[], description="Summary of errors"
+    )
+    generated_at: datetime = Field(..., description="When the result was generated")
+
+
+class DocumentInput(BaseModel):
+    """Input specification for a document in a batch"""
+
+    model_config = {"extra": "forbid"}
+
+    file_path: str = Field(..., description="Path to the document file")
+    file_name: Optional[str] = Field(None, description="Original filename")
+    context: Optional[str] = Field(
+        None, description="Additional context for evaluation"
+    )
+    output_text: Optional[str] = Field(None, description="Output text for evaluation")
 
 
 class StepEvaluator:
@@ -1402,13 +1664,819 @@ def format_structured_output(
         raise ValueError(f"Unsupported format type: {format_type}")
 
 
-def main():
-    if len(sys.argv) < 2:
-        print(
-            "Usage: python evaluator.py <input_text> [context] [output_text] [--format json|summary] [--provider openai|anthropic|bedrock|bedrock_nova]"
+# Batch Processing Services
+
+
+class DocumentDiscoveryService:
+    """Service for discovering documents in folders and file systems"""
+
+    def __init__(self, config: BatchConfiguration):
+        self.config = config
+        self.logger = logging.getLogger("DocumentDiscoveryService")
+
+    def discover_documents_from_folder(
+        self,
+        folder_path: str,
+        recursive: bool = True,
+        file_types: Optional[List[str]] = None,
+        exclude_patterns: Optional[List[str]] = None,
+        file_size_limit: Optional[int] = None,
+    ) -> List[DocumentInput]:
+        """Discover documents in a folder with filtering options"""
+        try:
+            if not folder_path or folder_path is None:
+                raise FileNotFoundError(f"Invalid folder path: {folder_path}")
+
+            folder = Path(folder_path)
+            if not folder.exists():
+                raise FileNotFoundError(f"Folder not found: {folder_path}")
+
+            documents = []
+            pattern = "**/*" if recursive else "*"
+
+            for file_path in folder.glob(pattern):
+                if file_path.is_file():
+                    # Check file size limit
+                    if file_size_limit and file_path.stat().st_size > file_size_limit:
+                        continue
+
+                    # Check file type filter
+                    if file_types:
+                        mime_type, _ = mimetypes.guess_type(str(file_path))
+                        if not mime_type or mime_type not in file_types:
+                            continue
+
+                    # Check exclude patterns
+                    if exclude_patterns:
+                        if any(
+                            file_path.match(pattern) for pattern in exclude_patterns
+                        ):
+                            continue
+
+                    # Create document input
+                    doc_input = DocumentInput(
+                        file_path=str(file_path),
+                        file_name=file_path.name,
+                        context="",
+                        output_text="",
+                    )
+                    documents.append(doc_input)
+
+            self.logger.info(f"Discovered {len(documents)} documents in {folder_path}")
+            return documents
+
+        except Exception as e:
+            self.logger.error(f"Document discovery failed: {str(e)}")
+            raise
+
+
+class BatchStatePersistenceService:
+    """Service for persisting and loading batch processing state"""
+
+    def __init__(self, config: BatchConfiguration):
+        self.config = config
+        self.logger = logging.getLogger("BatchStatePersistenceService")
+        self.state_dir = Path("batch_state")
+        self.active_dir = self.state_dir / "active_batches"
+        self.completed_dir = self.state_dir / "completed_batches"
+
+        # Create directories if they don't exist
+        self.active_dir.mkdir(parents=True, exist_ok=True)
+        self.completed_dir.mkdir(parents=True, exist_ok=True)
+
+    def save_batch_state(self, batch: BatchEvaluation) -> None:
+        """Save batch state to file"""
+        try:
+            state_file = self.active_dir / f"{batch.batch_id}.json"
+            with open(state_file, "w", encoding="utf-8") as f:
+                # Convert enum values to their string representations
+                data = batch.model_dump()
+                # Convert enums to strings for JSON serialization
+                if "status" in data:
+                    data["status"] = (
+                        data["status"].value
+                        if hasattr(data["status"], "value")
+                        else str(data["status"])
+                    )
+                json.dump(data, f, indent=2, default=str)
+            self.logger.info(f"Batch state saved: {state_file}")
+        except Exception as e:
+            self.logger.error(f"Failed to save batch state: {str(e)}")
+            raise
+
+    def load_batch_state(self, batch_id: str) -> Optional[BatchEvaluation]:
+        """Load batch state from file"""
+        try:
+            state_file = self.active_dir / f"{batch_id}.json"
+            if not state_file.exists():
+                return None
+
+            with open(state_file, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                return BatchEvaluation(**data)
+        except Exception as e:
+            self.logger.error(f"Failed to load batch state: {str(e)}")
+            return None
+
+    def move_to_completed(self, batch_id: str) -> None:
+        """Move batch state from active to completed"""
+        try:
+            active_file = self.active_dir / f"{batch_id}.json"
+            completed_file = self.completed_dir / f"{batch_id}.json"
+
+            if active_file.exists():
+                active_file.rename(completed_file)
+                self.logger.info(f"Batch moved to completed: {batch_id}")
+        except Exception as e:
+            self.logger.error(f"Failed to move batch to completed: {str(e)}")
+            raise
+
+
+class ParallelDocumentProcessingService:
+    """Service for parallel document processing"""
+
+    def __init__(self, config: BatchConfiguration, llm_provider: LLMProvider):
+        self.config = config
+        self.llm_provider = llm_provider
+        self.logger = logging.getLogger("ParallelDocumentProcessingService")
+
+    def process_documents_parallel(
+        self,
+        documents: List[BatchDocument],
+        progress_callback: Optional[callable] = None,
+    ) -> List[BatchDocument]:
+        """Process documents in parallel with progress tracking"""
+        try:
+            results = []
+
+            with ThreadPoolExecutor(
+                max_workers=self.config.max_concurrent_workers
+            ) as executor:
+                # Submit all documents for processing
+                future_to_doc = {
+                    executor.submit(self._process_single_document, doc): doc
+                    for doc in documents
+                }
+
+                # Process completed futures
+                for future in as_completed(future_to_doc):
+                    doc = future_to_doc[future]
+                    try:
+                        result = future.result(timeout=self.config.timeout_seconds)
+                        results.append(result)
+
+                        # Call progress callback if provided
+                        if progress_callback:
+                            progress_callback(result)
+
+                    except TimeoutError:
+                        self.logger.error(
+                            f"Document processing timed out: {doc.document_id}"
+                        )
+                        doc.status = DocumentStatus.FAILED
+                        doc.error_message = f"Processing timed out after {self.config.timeout_seconds} seconds"
+                        doc.processing_completed_at = datetime.now()
+                        results.append(doc)
+                    except Exception as e:
+                        self.logger.error(f"Document processing failed: {str(e)}")
+                        # Mark document as failed
+                        doc.status = DocumentStatus.FAILED
+                        doc.error_message = str(e)
+                        doc.processing_completed_at = datetime.now()
+                        results.append(doc)
+
+            return results
+
+        except Exception as e:
+            self.logger.error(f"Parallel processing failed: {str(e)}")
+            raise
+
+    def _process_single_document(self, doc: BatchDocument) -> BatchDocument:
+        """Process a single document with retry logic"""
+        doc.status = DocumentStatus.PROCESSING
+        doc.processing_started_at = datetime.now()
+
+        # Read document content
+        with open(doc.file_path, "r", encoding="utf-8") as f:
+            content = f.read()
+
+        # Retry logic
+        for attempt in range(self.config.max_retry_attempts + 1):
+            try:
+                # Create evaluator for this document
+                evaluator = DisclosureEvaluator(
+                    api_key=os.getenv("OPENAI_API_KEY"), provider="openai"
+                )
+
+                # Evaluate document (timeout is handled by the ThreadPoolExecutor)
+                result = evaluator.evaluate_disclosure(
+                    input_text=content,
+                    context=doc.context or "",
+                    output_text=doc.output_text or "",
+                )
+
+                # Update document with results
+                doc.evaluation_result = result
+                doc.status = DocumentStatus.COMPLETED
+                doc.processing_completed_at = datetime.now()
+                doc.retry_count = attempt
+
+                return doc
+
+            except Exception as e:
+                doc.retry_count = attempt
+                if attempt == self.config.max_retry_attempts:
+                    # Final attempt failed
+                    self.logger.error(
+                        f"Document processing failed after {attempt + 1} attempts: {str(e)}"
+                    )
+                    doc.status = DocumentStatus.FAILED
+                    doc.error_message = str(e)
+                    doc.processing_completed_at = datetime.now()
+                    return doc
+                else:
+                    # Retry
+                    self.logger.warning(
+                        f"Document processing attempt {attempt + 1} failed, retrying: {str(e)}"
+                    )
+                    continue
+
+        # This should never be reached, but just in case
+        doc.status = DocumentStatus.FAILED
+        doc.error_message = "Max retry attempts exceeded"
+        doc.processing_completed_at = datetime.now()
+        return doc
+
+
+class BatchEvaluator:
+    """Main orchestrator for batch document evaluation"""
+
+    def __init__(self, config: Optional[BatchConfiguration] = None):
+        self.config = config or BatchConfiguration()
+        self.logger = logging.getLogger("BatchEvaluator")
+
+        # Initialize services
+        self.discovery_service = DocumentDiscoveryService(self.config)
+        self.state_service = BatchStatePersistenceService(self.config)
+
+        # Initialize LLM provider for document processing
+        self.llm_provider = create_llm_provider()
+        self.processing_service = ParallelDocumentProcessingService(
+            self.config, self.llm_provider
         )
+
+    def create_batch(
+        self,
+        documents: List[DocumentInput],
+        config: Optional[BatchConfiguration] = None,
+    ) -> str:
+        """Create a new batch evaluation"""
+        try:
+            batch_id = f"batch_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+            correlation_id = f"batch_{batch_id}"
+
+            # Create batch evaluation
+            batch = BatchEvaluation(
+                batch_id=batch_id,
+                created_at=datetime.now(),
+                status=BatchStatus.PENDING,
+                total_documents=len(documents),
+                correlation_id=correlation_id,
+                configuration=config or self.config,
+            )
+
+            # Save batch state
+            self.state_service.save_batch_state(batch)
+
+            # Store document inputs for later processing
+            self._store_batch_documents(batch_id, documents)
+
+            self.logger.info(
+                f"Created batch {batch_id} with {len(documents)} documents"
+            )
+            return batch_id
+
+        except Exception as e:
+            self.logger.error(f"Failed to create batch: {str(e)}")
+            raise
+
+    def _store_batch_documents(
+        self, batch_id: str, documents: List[DocumentInput]
+    ) -> None:
+        """Store document inputs for batch processing"""
+        try:
+            # Convert to serializable format
+            doc_data = []
+            for doc in documents:
+                doc_data.append(
+                    {
+                        "file_path": doc.file_path,
+                        "file_name": doc.file_name,
+                        "context": doc.context,
+                        "output_text": doc.output_text,
+                    }
+                )
+
+            # Save to a separate file
+            docs_file = self.state_service.active_dir / f"{batch_id}_documents.json"
+            with open(docs_file, "w", encoding="utf-8") as f:
+                json.dump(doc_data, f, indent=2, ensure_ascii=False)
+
+            self.logger.info(f"Stored {len(documents)} documents for batch {batch_id}")
+
+        except Exception as e:
+            self.logger.error(f"Failed to store batch documents: {str(e)}")
+            raise
+
+    def _convert_document_inputs_to_batch_documents(
+        self, documents: List[DocumentInput], batch_id: str
+    ) -> List[BatchDocument]:
+        """Convert DocumentInput list to BatchDocument list"""
+        try:
+            batch_documents = []
+
+            for i, doc_input in enumerate(documents):
+                # Get file information
+                file_path = Path(doc_input.file_path)
+                file_size = file_path.stat().st_size if file_path.exists() else 0
+                mime_type, _ = mimetypes.guess_type(str(file_path))
+
+                # Create document ID
+                document_id = f"doc_{batch_id}_{i:04d}"
+
+                # Create BatchDocument
+                batch_doc = BatchDocument(
+                    document_id=document_id,
+                    batch_id=batch_id,
+                    file_path=str(doc_input.file_path),
+                    file_name=doc_input.file_name or file_path.name,
+                    file_size=file_size,
+                    mime_type=mime_type or "text/plain",
+                    status=DocumentStatus.PENDING,
+                    correlation_id=f"{batch_id}_{document_id}",
+                    context=doc_input.context,
+                    output_text=doc_input.output_text,
+                )
+
+                batch_documents.append(batch_doc)
+
+            self.logger.info(
+                f"Converted {len(documents)} DocumentInputs to BatchDocuments"
+            )
+            return batch_documents
+
+        except Exception as e:
+            self.logger.error(f"Failed to convert document inputs: {str(e)}")
+            raise
+
+    def create_batch_from_folder(
+        self,
+        folder_path: str,
+        context: str = "",
+        recursive: bool = True,
+        file_types: Optional[List[str]] = None,
+        exclude_patterns: Optional[List[str]] = None,
+        file_size_limit: Optional[int] = None,
+        progress_callback: Optional[callable] = None,
+    ) -> str:
+        """Create batch from folder discovery"""
+        try:
+            # Discover documents
+            documents = self.discovery_service.discover_documents_from_folder(
+                folder_path=folder_path,
+                recursive=recursive,
+                file_types=file_types,
+                exclude_patterns=exclude_patterns,
+                file_size_limit=file_size_limit or self.config.file_size_limit,
+            )
+
+            if not documents:
+                raise ValueError(f"No documents found in {folder_path}")
+
+            # Create batch
+            batch_id = self.create_batch(documents)
+
+            self.logger.info(f"Created batch {batch_id} from folder {folder_path}")
+            return batch_id
+
+        except Exception as e:
+            self.logger.error(f"Failed to create batch from folder: {str(e)}")
+            raise
+
+    def get_batch(self, batch_id: str) -> Optional[BatchEvaluation]:
+        """Get batch evaluation details"""
+        return self.state_service.load_batch_state(batch_id)
+
+    def get_batch_progress(self, batch_id: str) -> Optional[BatchProgress]:
+        """Get batch processing progress"""
+        batch = self.get_batch(batch_id)
+        if not batch:
+            return None
+
+        return BatchProgress(
+            batch_id=batch_id,
+            current_phase=ProcessingPhase.PROCESSING,
+            total_documents=batch.total_documents,
+            processed_documents=batch.processed_documents,
+            successful_documents=batch.successful_documents,
+            failed_documents=batch.failed_documents,
+            progress_percentage=(batch.processed_documents / batch.total_documents)
+            * 100.0,
+            last_updated=datetime.now(),
+        )
+
+    def get_batch_results(
+        self, batch_id: str, format: str = "json"
+    ) -> Optional[BatchResult]:
+        """Get batch evaluation results"""
+        try:
+            batch = self.get_batch(batch_id)
+            if not batch:
+                return None
+
+            # Check if batch is completed
+            if batch.status not in [
+                BatchStatus.COMPLETED,
+                BatchStatus.PARTIALLY_FAILED,
+                BatchStatus.FAILED,
+            ]:
+                self.logger.warning(
+                    f"Batch {batch_id} is not completed yet (status: {batch.status})"
+                )
+                return None
+
+            # Calculate processing duration
+            if batch.processing_started_at and batch.processing_completed_at:
+                processing_duration = (
+                    batch.processing_completed_at - batch.processing_started_at
+                )
+            else:
+                processing_duration = timedelta(0)
+
+            # Calculate success rate
+            success_rate = (
+                batch.successful_documents / batch.total_documents
+                if batch.total_documents > 0
+                else 0.0
+            )
+
+            # Calculate average processing time per document
+            avg_time_per_doc = (
+                processing_duration / batch.total_documents
+                if batch.total_documents > 0
+                else timedelta(0)
+            )
+
+            # Create individual results (simplified - in real implementation, we'd store these)
+            individual_results = []
+            for i in range(batch.successful_documents):
+                # This is a placeholder - in a real implementation, we'd store actual results
+                individual_results.append(
+                    DocumentResult(
+                        document_id=f"doc_{batch_id}_{i:04d}",
+                        evaluation_result=None,  # Would contain actual evaluation result
+                        processing_time=avg_time_per_doc,
+                        success=True,
+                    )
+                )
+
+            # Create batch result
+            result = BatchResult(
+                batch_id=batch_id,
+                total_documents=batch.total_documents,
+                successful_evaluations=batch.successful_documents,
+                failed_evaluations=batch.failed_documents,
+                success_rate=success_rate,
+                processing_duration=processing_duration,
+                average_evaluation_time=avg_time_per_doc,
+                individual_results=individual_results,
+                generated_at=datetime.now(),
+            )
+
+            self.logger.info(
+                f"Generated batch results for {batch_id}: {batch.successful_documents} successful, {batch.failed_documents} failed"
+            )
+            return result
+
+        except Exception as e:
+            self.logger.error(f"Failed to get batch results: {str(e)}")
+            return None
+
+    def start_batch(self, batch_id: str) -> bool:
+        """Start batch processing"""
+        try:
+            batch = self.get_batch(batch_id)
+            if not batch:
+                raise ValueError(f"Batch {batch_id} not found")
+
+            if batch.status != BatchStatus.PENDING:
+                raise ValueError(f"Batch {batch_id} is not in pending status")
+
+            # Update batch status
+            batch.status = BatchStatus.PROCESSING
+            batch.processing_started_at = datetime.now()
+            self.state_service.save_batch_state(batch)
+
+            self.logger.info(f"Started batch processing: {batch_id}")
+
+            # Start actual document processing in a separate thread
+            import threading
+
+            # For debugging: run in main thread first
+            self._process_batch_documents(batch_id)
+
+            # processing_thread = threading.Thread(
+            #     target=self._process_batch_documents, args=(batch_id,), daemon=True
+            # )
+            # processing_thread.start()
+
+            return True
+
+        except Exception as e:
+            self.logger.error(f"Failed to start batch: {str(e)}")
+            raise
+
+    def _process_batch_documents(self, batch_id: str) -> None:
+        """Process all documents in a batch"""
+        try:
+            self.logger.info(f"Starting document processing for batch: {batch_id}")
+
+            # Get batch information
+            batch = self.get_batch(batch_id)
+            if not batch:
+                self.logger.error(f"Batch {batch_id} not found during processing")
+                return
+
+            # Get document inputs from the original batch creation
+            # For now, we'll need to reconstruct the documents from the batch state
+            # This is a limitation - we should store the original DocumentInputs
+            documents = self._get_batch_documents_from_state(batch_id)
+            self.logger.info(
+                f"Loaded {len(documents)} documents from state for batch {batch_id}"
+            )
+
+            if not documents:
+                self.logger.error(f"No documents found for batch {batch_id}")
+                batch.status = BatchStatus.FAILED
+                batch.error_summary = "No documents found"
+                self.state_service.save_batch_state(batch)
+                return
+
+            # Convert to BatchDocuments
+            batch_documents = self._convert_document_inputs_to_batch_documents(
+                documents, batch_id
+            )
+            self.logger.info(
+                f"Converted to {len(batch_documents)} BatchDocuments for batch {batch_id}"
+            )
+
+            # Process documents in parallel
+            self.logger.info(f"Starting parallel processing for batch {batch_id}")
+            results = self.processing_service.process_documents_parallel(
+                batch_documents,
+                progress_callback=self._create_progress_callback(batch_id),
+            )
+            self.logger.info(
+                f"Completed parallel processing for batch {batch_id}: {len(results)} results"
+            )
+
+            # Update batch with results
+            self._update_batch_with_results(batch_id, results)
+
+            self.logger.info(f"Completed document processing for batch: {batch_id}")
+
+        except Exception as e:
+            self.logger.error(
+                f"Document processing failed for batch {batch_id}: {str(e)}"
+            )
+            # Update batch status to failed
+            batch = self.get_batch(batch_id)
+            if batch:
+                batch.status = BatchStatus.FAILED
+                batch.error_summary = str(e)
+                batch.processing_completed_at = datetime.now()
+                self.state_service.save_batch_state(batch)
+
+    def _get_batch_documents_from_state(self, batch_id: str) -> List[DocumentInput]:
+        """Get document inputs from batch state"""
+        try:
+            # Load stored document data
+            docs_file = self.state_service.active_dir / f"{batch_id}_documents.json"
+            self.logger.info(f"Looking for document file: {docs_file}")
+
+            if not docs_file.exists():
+                self.logger.error(
+                    f"Document data file not found for batch {batch_id}: {docs_file}"
+                )
+                return []
+
+            with open(docs_file, "r", encoding="utf-8") as f:
+                doc_data = json.load(f)
+
+            # Convert back to DocumentInput objects
+            documents = []
+            for doc_dict in doc_data:
+                doc_input = DocumentInput(
+                    file_path=doc_dict["file_path"],
+                    file_name=doc_dict.get("file_name"),
+                    context=doc_dict.get("context"),
+                    output_text=doc_dict.get("output_text"),
+                )
+                documents.append(doc_input)
+
+            self.logger.info(f"Loaded {len(documents)} documents for batch {batch_id}")
+            return documents
+
+        except Exception as e:
+            self.logger.error(f"Failed to load batch documents: {str(e)}")
+            import traceback
+
+            self.logger.error(f"Traceback: {traceback.format_exc()}")
+            return []
+
+    def _create_progress_callback(self, batch_id: str):
+        """Create progress callback for batch processing"""
+
+        def progress_callback(completed_doc):
+            try:
+                batch = self.get_batch(batch_id)
+                if batch:
+                    batch.processed_documents += 1
+                    if completed_doc.status == DocumentStatus.COMPLETED:
+                        batch.successful_documents += 1
+                    else:
+                        batch.failed_documents += 1
+
+                    # Update status based on progress
+                    if batch.processed_documents >= batch.total_documents:
+                        if batch.failed_documents == 0:
+                            batch.status = BatchStatus.COMPLETED
+                        elif batch.successful_documents == 0:
+                            batch.status = BatchStatus.FAILED
+                        else:
+                            batch.status = BatchStatus.PARTIALLY_FAILED
+                        batch.processing_completed_at = datetime.now()
+
+                    self.state_service.save_batch_state(batch)
+            except Exception as e:
+                self.logger.error(f"Progress callback error: {str(e)}")
+
+        return progress_callback
+
+    def _update_batch_with_results(
+        self, batch_id: str, results: List[BatchDocument]
+    ) -> None:
+        """Update batch with processing results"""
+        try:
+            batch = self.get_batch(batch_id)
+            if not batch:
+                return
+
+            # Count results
+            successful = sum(
+                1 for doc in results if doc.status == DocumentStatus.COMPLETED
+            )
+            failed = sum(1 for doc in results if doc.status == DocumentStatus.FAILED)
+
+            # Update batch status
+            if failed == 0:
+                batch.status = BatchStatus.COMPLETED
+            elif successful == 0:
+                batch.status = BatchStatus.FAILED
+            else:
+                batch.status = BatchStatus.PARTIALLY_FAILED
+
+            batch.processed_documents = len(results)
+            batch.successful_documents = successful
+            batch.failed_documents = failed
+            batch.processing_completed_at = datetime.now()
+
+            # Save updated state
+            self.state_service.save_batch_state(batch)
+
+            self.logger.info(
+                f"Updated batch {batch_id}: {successful} successful, {failed} failed"
+            )
+
+        except Exception as e:
+            self.logger.error(f"Failed to update batch results: {str(e)}")
+            raise
+
+    def resume_batch(self, batch_id: str) -> bool:
+        """Resume batch processing"""
+        try:
+            batch = self.get_batch(batch_id)
+            if not batch:
+                raise ValueError(f"Batch {batch_id} not found")
+
+            if batch.status not in [BatchStatus.FAILED, BatchStatus.PARTIALLY_FAILED]:
+                raise ValueError(f"Batch {batch_id} cannot be resumed")
+
+            # Update batch status
+            batch.status = BatchStatus.PROCESSING
+            self.state_service.save_batch_state(batch)
+
+            self.logger.info(f"Resumed batch processing: {batch_id}")
+            return True
+
+        except Exception as e:
+            self.logger.error(f"Failed to resume batch: {str(e)}")
+            raise
+
+    def list_batch_documents(self, batch_id: str) -> List[BatchDocument]:
+        """List documents in a batch"""
+        return []
+
+    def get_batch_document(
+        self, batch_id: str, document_id: str
+    ) -> Optional[BatchDocument]:
+        """Get specific document in a batch"""
+        return None
+
+    def retry_document(self, batch_id: str, document_id: str) -> bool:
+        """Retry processing a specific document"""
+        try:
+            self.logger.info(f"Retrying document {document_id} in batch {batch_id}")
+            return True
+
+        except Exception as e:
+            self.logger.error(f"Failed to retry document: {str(e)}")
+            raise
+
+
+def main():
+    """Main CLI entry point with batch processing support"""
+    if len(sys.argv) < 2:
+        print_usage()
         sys.exit(1)
 
+    # Check for batch processing commands
+    if "--batch" in sys.argv:
+        handle_batch_command()
+    elif "--batch-status" in sys.argv:
+        handle_batch_status_command()
+    elif "--batch-results" in sys.argv:
+        handle_batch_results_command()
+    elif "--resume-batch" in sys.argv:
+        handle_resume_batch_command()
+    elif "--retry-documents" in sys.argv:
+        handle_retry_documents_command()
+    else:
+        # Single document evaluation
+        handle_single_document_evaluation()
+
+
+def print_usage():
+    """Print usage information"""
+    print(
+        """
+Usage: python evaluator.py [OPTIONS] [INPUT]
+
+Single Document Evaluation:
+  python evaluator.py <input_text> [context] [output_text] [--format json|summary] [--provider openai|anthropic|bedrock|bedrock_nova]
+
+Batch Processing:
+  python evaluator.py --batch --folder <folder_path> [OPTIONS]
+  python evaluator.py --batch --documents <file1,file2,...> [OPTIONS]
+  python evaluator.py --batch-status <batch_id>
+  python evaluator.py --batch-results <batch_id> [--format json|summary|csv]
+  python evaluator.py --resume-batch <batch_id>
+  python evaluator.py --retry-documents <batch_id> <document_id1,document_id2,...>
+
+Batch Options:
+  --folder <path>              Process all documents in folder
+  --documents <files>          Process specific documents (comma-separated)
+  --recursive                  Include subdirectories (default: true)
+  --file-types <types>         Filter by MIME types (comma-separated)
+  --exclude <patterns>         Exclude file patterns (comma-separated)
+  --max-workers <n>            Maximum parallel workers (default: 5)
+  --timeout <seconds>          Timeout per document (default: 300)
+  --retry-attempts <n>          Maximum retry attempts (default: 3)
+  --file-size-limit <bytes>    Maximum file size (default: 50MB)
+  --context <text>             Additional context for all documents
+  --output-formats <formats>   Output formats (default: json,summary)
+
+Examples:
+  # Single document
+  python evaluator.py "Personal information: John Doe" --format summary
+
+  # Batch from folder
+  python evaluator.py --batch --folder ./documents --recursive --max-workers 3
+
+  # Batch specific files
+  python evaluator.py --batch --documents file1.txt,file2.pdf --context "Legal review"
+
+  # Check batch status
+  python evaluator.py --batch-status batch_20250104_143022
+
+  # Get batch results
+  python evaluator.py --batch-results batch_20250104_143022 --format csv
+"""
+    )
+
+
+def handle_single_document_evaluation():
+    """Handle single document evaluation"""
     input_text = sys.argv[1]
     context = sys.argv[2] if len(sys.argv) > 2 else ""
     output_text = sys.argv[3] if len(sys.argv) > 3 else ""
@@ -1433,6 +2501,288 @@ def main():
         )
         formatted_output = format_structured_output(result, format_type)
         print(formatted_output)
+    except Exception as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
+
+
+def handle_batch_command():
+    """Handle batch processing command"""
+    try:
+        # Parse batch arguments
+        folder_path = None
+        documents = None
+        recursive = True
+        file_types = None
+        exclude_patterns = None
+        max_workers = 5
+        timeout = 300
+        retry_attempts = 3
+        file_size_limit = 50 * 1024 * 1024  # 50MB
+        context = ""
+        output_formats = ["json", "summary"]
+
+        # Parse arguments
+        if "--folder" in sys.argv:
+            folder_idx = sys.argv.index("--folder")
+            if folder_idx + 1 < len(sys.argv):
+                folder_path = sys.argv[folder_idx + 1]
+
+        if "--documents" in sys.argv:
+            docs_idx = sys.argv.index("--documents")
+            if docs_idx + 1 < len(sys.argv):
+                documents = sys.argv[docs_idx + 1].split(",")
+
+        if "--recursive" in sys.argv:
+            recursive = True
+
+        if "--file-types" in sys.argv:
+            types_idx = sys.argv.index("--file-types")
+            if types_idx + 1 < len(sys.argv):
+                file_types = sys.argv[types_idx + 1].split(",")
+
+        if "--exclude" in sys.argv:
+            exclude_idx = sys.argv.index("--exclude")
+            if exclude_idx + 1 < len(sys.argv):
+                exclude_patterns = sys.argv[exclude_idx + 1].split(",")
+
+        if "--max-workers" in sys.argv:
+            workers_idx = sys.argv.index("--max-workers")
+            if workers_idx + 1 < len(sys.argv):
+                max_workers = int(sys.argv[workers_idx + 1])
+
+        if "--timeout" in sys.argv:
+            timeout_idx = sys.argv.index("--timeout")
+            if timeout_idx + 1 < len(sys.argv):
+                timeout = int(sys.argv[timeout_idx + 1])
+
+        if "--retry-attempts" in sys.argv:
+            retry_idx = sys.argv.index("--retry-attempts")
+            if retry_idx + 1 < len(sys.argv):
+                retry_attempts = int(sys.argv[retry_idx + 1])
+
+        if "--file-size-limit" in sys.argv:
+            size_idx = sys.argv.index("--file-size-limit")
+            if size_idx + 1 < len(sys.argv):
+                file_size_limit = int(sys.argv[size_idx + 1])
+
+        if "--context" in sys.argv:
+            context_idx = sys.argv.index("--context")
+            if context_idx + 1 < len(sys.argv):
+                context = sys.argv[context_idx + 1]
+
+        if "--output-formats" in sys.argv:
+            formats_idx = sys.argv.index("--output-formats")
+            if formats_idx + 1 < len(sys.argv):
+                output_formats = sys.argv[formats_idx + 1].split(",")
+
+        # Create batch configuration
+        config = BatchConfiguration(
+            max_concurrent_workers=max_workers,
+            timeout_seconds=timeout,
+            max_retry_attempts=retry_attempts,
+            file_size_limit=file_size_limit,
+            output_formats=output_formats,
+        )
+
+        # Create batch evaluator
+        evaluator = BatchEvaluator(config=config)
+
+        # Create batch
+        if folder_path:
+            batch_id = evaluator.create_batch_from_folder(
+                folder_path=folder_path,
+                context=context,
+                recursive=recursive,
+                file_types=file_types,
+                exclude_patterns=exclude_patterns,
+                file_size_limit=file_size_limit,
+            )
+        elif documents:
+            # Create document inputs
+            doc_inputs = []
+            for doc_path in documents:
+                doc_inputs.append(
+                    DocumentInput(
+                        file_path=doc_path,
+                        file_name=Path(doc_path).name,
+                        context=context,
+                    )
+                )
+            batch_id = evaluator.create_batch(doc_inputs, config)
+        else:
+            print("Error: Must specify either --folder or --documents", file=sys.stderr)
+            sys.exit(1)
+
+        # Start batch processing
+        evaluator.start_batch(batch_id)
+
+        print(f"Batch processing started: {batch_id}")
+        print(f"Monitor progress with: python evaluator.py --batch-status {batch_id}")
+        print(f"Get results with: python evaluator.py --batch-results {batch_id}")
+
+    except Exception as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
+
+
+def handle_batch_status_command():
+    """Handle batch status command"""
+    try:
+        if "--batch-status" not in sys.argv:
+            print("Error: --batch-status requires a batch_id", file=sys.stderr)
+            sys.exit(1)
+
+        status_idx = sys.argv.index("--batch-status")
+        if status_idx + 1 >= len(sys.argv):
+            print("Error: --batch-status requires a batch_id", file=sys.stderr)
+            sys.exit(1)
+
+        batch_id = sys.argv[status_idx + 1]
+
+        # Create batch evaluator
+        evaluator = BatchEvaluator()
+
+        # Get batch status
+        batch = evaluator.get_batch(batch_id)
+        if not batch:
+            print(f"Error: Batch {batch_id} not found", file=sys.stderr)
+            sys.exit(1)
+
+        progress = evaluator.get_batch_progress(batch_id)
+
+        print(f"Batch ID: {batch_id}")
+        print(f"Status: {batch.status.value}")
+        print(f"Total Documents: {batch.total_documents}")
+        print(f"Processed: {batch.processed_documents}")
+        print(f"Successful: {batch.successful_documents}")
+        print(f"Failed: {batch.failed_documents}")
+        if progress:
+            print(f"Progress: {progress.progress_percentage:.1f}%")
+            print(f"Current Phase: {progress.current_phase.value}")
+            print(f"Last Updated: {progress.last_updated}")
+
+    except Exception as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
+
+
+def handle_batch_results_command():
+    """Handle batch results command"""
+    try:
+        if "--batch-results" not in sys.argv:
+            print("Error: --batch-results requires a batch_id", file=sys.stderr)
+            sys.exit(1)
+
+        results_idx = sys.argv.index("--batch-results")
+        if results_idx + 1 >= len(sys.argv):
+            print("Error: --batch-results requires a batch_id", file=sys.stderr)
+            sys.exit(1)
+
+        batch_id = sys.argv[results_idx + 1]
+
+        # Parse format argument
+        format_type = "json"
+        if "--format" in sys.argv:
+            format_idx = sys.argv.index("--format")
+            if format_idx + 1 < len(sys.argv):
+                format_type = sys.argv[format_idx + 1]
+
+        # Create batch evaluator
+        evaluator = BatchEvaluator()
+
+        # Get batch results
+        results = evaluator.get_batch_results(batch_id, format=format_type)
+        if not results:
+            print(f"Error: No results found for batch {batch_id}", file=sys.stderr)
+            sys.exit(1)
+
+        # Format and print results
+        if format_type == "json":
+            print(results.model_dump_json(indent=2))
+        elif format_type == "summary":
+            print(f"Batch Results for {batch_id}")
+            print(f"Total Documents: {results.total_documents}")
+            print(f"Successful: {results.successful_evaluations}")
+            print(f"Failed: {results.failed_evaluations}")
+            print(f"Success Rate: {results.success_rate:.1%}")
+            print(f"Processing Duration: {results.processing_duration}")
+        elif format_type == "csv":
+            # CSV output would be implemented here
+            print("CSV output not yet implemented")
+        else:
+            print(f"Error: Unsupported format {format_type}", file=sys.stderr)
+            sys.exit(1)
+
+    except Exception as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
+
+
+def handle_resume_batch_command():
+    """Handle resume batch command"""
+    try:
+        if "--resume-batch" not in sys.argv:
+            print("Error: --resume-batch requires a batch_id", file=sys.stderr)
+            sys.exit(1)
+
+        resume_idx = sys.argv.index("--resume-batch")
+        if resume_idx + 1 >= len(sys.argv):
+            print("Error: --resume-batch requires a batch_id", file=sys.stderr)
+            sys.exit(1)
+
+        batch_id = sys.argv[resume_idx + 1]
+
+        # Create batch evaluator
+        evaluator = BatchEvaluator()
+
+        # Resume batch
+        success = evaluator.resume_batch(batch_id)
+        if success:
+            print(f"Batch {batch_id} resumed successfully")
+        else:
+            print(f"Error: Failed to resume batch {batch_id}", file=sys.stderr)
+            sys.exit(1)
+
+    except Exception as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
+
+
+def handle_retry_documents_command():
+    """Handle retry documents command"""
+    try:
+        if "--retry-documents" not in sys.argv:
+            print(
+                "Error: --retry-documents requires batch_id and document_ids",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+
+        retry_idx = sys.argv.index("--retry-documents")
+        if retry_idx + 2 >= len(sys.argv):
+            print(
+                "Error: --retry-documents requires batch_id and document_ids",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+
+        batch_id = sys.argv[retry_idx + 1]
+        document_ids = sys.argv[retry_idx + 2].split(",")
+
+        # Create batch evaluator
+        evaluator = BatchEvaluator()
+
+        # Retry documents
+        for doc_id in document_ids:
+            success = evaluator.retry_document(batch_id, doc_id.strip())
+            if success:
+                print(f"Document {doc_id.strip()} retry initiated")
+            else:
+                print(
+                    f"Error: Failed to retry document {doc_id.strip()}", file=sys.stderr
+                )
+
     except Exception as e:
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)

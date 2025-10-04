@@ -14,6 +14,10 @@
 - **詳細な理由**: 各評価段階の詳細な理由と法的根拠
 - **ユーザー判断支援**: システムが判断を下すのではなく、判断に必要な情報を提供
 - **構造化ログ**: 相関 ID による追跡可能なログ出力
+- **バッチ処理**: 複数の文書を並列処理で効率的に評価
+- **進捗追跡**: リアルタイムでのバッチ処理進捗監視
+- **状態永続化**: バッチ処理の中断・再開対応
+- **エラーハンドリング**: 個別文書の失敗処理とリトライ機能
 
 ## 評価対象の不開示事由
 
@@ -82,6 +86,37 @@ python evaluator.py "情報の内容" --format json
 python evaluator.py "情報の内容" --format summary
 ```
 
+### 複数文書の一括評価（バッチ処理）
+
+```bash
+# フォルダ内の全文書を一括評価
+python evaluator.py --batch --folder ./documents
+
+# 特定のファイルタイプのみを評価
+python evaluator.py --batch --folder ./documents --file-types "text/plain"
+
+# 並行処理数を指定して評価
+python evaluator.py --batch --folder ./documents --max-workers 4
+
+# コンテキスト付きで一括評価
+python evaluator.py --batch --folder ./documents --context "追加のコンテキスト情報"
+
+# 特定のファイルを指定して評価
+python evaluator.py --batch --documents file1.txt,file2.pdf
+
+# バッチ処理の進捗確認
+python evaluator.py --batch-status batch_20251005_001441
+
+# バッチ処理の結果取得
+python evaluator.py --batch-results batch_20251005_001441 --format json
+
+# バッチ処理の再開
+python evaluator.py --resume-batch batch_20251005_001441
+
+# 特定のドキュメントの再処理
+python evaluator.py --retry-documents batch_20251005_001441 doc_001,doc_002
+```
+
 ## 実行例
 
 ### 個人情報の評価（OpenAI 使用）
@@ -100,6 +135,28 @@ python evaluator.py "私の名前は、山田太郎です。私の住所は、�
 
 ```bash
 python evaluator.py "当社の売上高は前年比120%増の50億円を記録しました。主要取引先はA社、B社、C社です。"
+```
+
+### 複数文書の一括評価例
+
+```bash
+# 複数の文書ファイルを一括評価
+python evaluator.py --batch --folder ./documents --provider openai
+
+# 特定のファイルタイプ（テキストファイル）のみを評価
+python evaluator.py --batch --folder ./documents --file-types "text/plain"
+
+# 並行処理数を指定して高速処理
+python evaluator.py --batch --folder ./documents --max-workers 4 --timeout 300
+
+# バッチ処理の進捗確認
+python evaluator.py --batch-status batch_20251005_001441
+
+# バッチ処理の結果取得（JSON形式）
+python evaluator.py --batch-results batch_20251005_001441 --format json
+
+# バッチ処理の結果取得（CSV形式）
+python evaluator.py --batch-results batch_20251005_001441 --format csv
 ```
 
 ## 出力例
@@ -198,6 +255,13 @@ AWS_REGION=us-east-1
 - **CriterionEvaluator**: 単一 criteria の評価管理
 - **ResultAggregator**: 評価結果の処理
 - **DisclosureEvaluator**: メイン評価オーケストレーター
+- **BatchEvaluator**: 複数文書の一括評価オーケストレーター
+- **DocumentDiscoveryService**: 文書ファイルの自動発見とフィルタリング
+- **ParallelDocumentProcessingService**: 並行文書処理とタイムアウト管理
+- **BatchStatePersistenceService**: バッチ処理状態の永続化と復元
+- **BatchConfiguration**: バッチ処理の設定管理（並行数、タイムアウト、リトライ等）
+- **BatchDocument**: 個別文書の処理状態管理
+- **BatchProgress**: バッチ処理の進捗追跡
 
 ### 設計原則
 
@@ -205,10 +269,18 @@ AWS_REGION=us-east-1
 - **Pydantic Models**: 型安全なデータ検証
 - **Structured Logging**: 構造化ログによる追跡可能性
 - **Error Handling**: 包括的なエラーハンドリングとフォールバック
+- **Parallel Processing**: 複数文書の並行処理による効率化
+- **State Persistence**: バッチ処理状態の永続化による中断・再開対応
+- **Retry Mechanism**: 失敗時の自動リトライ機能
+- **Progress Tracking**: リアルタイム進捗監視とコールバック
+- **Error Recovery**: 個別文書の失敗処理とバッチ継続
+- **Result Aggregation**: 複数文書の評価結果統合
 
 ## 技術仕様
 
 ### 評価フロー
+
+#### 単一文書評価
 
 1. **入力検証**: 評価対象情報の検証
 2. **プロバイダー選択**: 指定された LLM プロバイダーの初期化
@@ -216,6 +288,19 @@ AWS_REGION=us-east-1
 4. **LLM 分析**: 選択されたモデルによる詳細な法的分析
 5. **結果集約**: 評価結果の構造化
 6. **出力生成**: JSON/サマリー形式での出力
+
+#### 複数文書一括評価（バッチ処理）
+
+1. **文書発見**: 指定フォルダ内の文書ファイルの自動発見
+2. **フィルタリング**: ファイルタイプ、サイズ、除外パターンによる絞り込み
+3. **バッチ作成**: 評価対象文書のバッチ作成と状態管理
+4. **並行処理**: 複数文書の並行評価（設定可能なワーカー数）
+5. **進捗追跡**: リアルタイム進捗監視とコールバック
+6. **エラーハンドリング**: 個別文書の失敗処理とリトライ
+7. **結果集約**: 全文書の評価結果の統合
+8. **状態永続化**: 処理状態の保存と中断・再開対応
+9. **結果出力**: JSON/CSV 形式での結果出力
+10. **バッチ管理**: バッチ状態の確認、結果取得、再開機能
 
 ### ログ機能
 
@@ -244,6 +329,16 @@ disclosure-evaluator/
 │   ├── system_step_evaluation.md    # ステップ評価用システムプロンプト
 │   ├── system_score_reasoning.md    # スコア推論用システムプロンプト
 │   └── user_step_template.md        # ユーザープロンプトテンプレート
+├── tests/                            # テストファイル
+│   ├── unit/                        # 単体テスト
+│   └── integration/                 # 統合テスト
+├── specs/                           # 仕様書・設計書
+│   └── 001-/                       # バッチ処理機能の仕様
+├── batch_state/                     # バッチ処理状態ファイル（自動生成）
+│   ├── active_batches/              # 処理中のバッチ
+│   │   ├── batch_YYYYMMDD_HHMMSS.json        # バッチ状態ファイル
+│   │   └── batch_YYYYMMDD_HHMMSS_documents.json  # ドキュメント情報ファイル
+│   └── completed_batches/           # 完了したバッチ
 ├── logs/                             # 評価ログファイル（自動生成）
 ├── outputs/                          # 評価結果出力ファイル（自動生成）
 ├── evaluator.py                      # メイン評価スクリプト

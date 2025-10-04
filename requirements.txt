@@ -8,3 +8,12 @@ anthropic>=0.60.0
 boto3>=1.39.0
 
 # Logging and utilities
+
+# Batch processing dependencies
+concurrent-futures>=3.1.1; python_version < "3.2"
+pathlib2>=2.3.0; python_version < "3.4"
+
+# Testing dependencies
+pytest>=7.0.0
+pytest-asyncio>=0.21.0
+pytest-cov>=4.0.0
