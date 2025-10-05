@@ -608,5 +608,5 @@ graph TD
 
 ---
 
-**Last Updated**: 2025-01-04
+**Last Updated**: 2025-10-04
 **Based On**: Project root AGENTS.md standards

@@ -18,6 +18,9 @@
 - **進捗追跡**: リアルタイムでのバッチ処理進捗監視
 - **状態永続化**: バッチ処理の中断・再開対応
 - **エラーハンドリング**: 個別文書の失敗処理とリトライ機能
+- **AWS Lambda API**: サーバーレス API による外部システム連携
+- **FastAPI REST API**: 高性能な HTTP エンドポイントによる評価リクエスト処理
+- **RESTful API**: HTTP エンドポイントによる評価リクエスト処理
 
 ## 評価対象の不開示事由
 
@@ -29,6 +32,180 @@
 6. **行政運営等** (第 5 条第 6 号)
 
 ## 使用方法
+
+### FastAPI REST API を使用する場合
+
+#### クイックスタート
+
+```bash
+# 依存関係のインストール
+pip install -r deployment/fastapi/requirements.txt
+
+# 環境変数の設定
+export OPENAI_API_KEY="your_openai_api_key_here"
+export ANTHROPIC_API_KEY="your_anthropic_api_key_here"
+
+# FastAPI アプリケーションの起動
+uvicorn api.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+#### Docker を使用したデプロイメント
+
+```bash
+# Docker Compose を使用
+cd deployment/fastapi
+docker-compose up -d
+
+# 個別の Docker コンテナ
+docker build -f deployment/fastapi/Dockerfile -t disclosure-evaluator-fastapi .
+docker run -p 8000:8000 -e OPENAI_API_KEY=your_key disclosure-evaluator-fastapi
+```
+
+#### API エンドポイント
+
+- **ヘルスチェック**: `GET /v1/health`
+- **単一文書評価**: `POST /v1/evaluation`
+- **バッチ評価**: `POST /v1/batch`
+- **ステータス確認**: `GET /v1/status/{request_id}`
+- **API ドキュメント**: `GET /docs`
+
+#### 使用例
+
+**単一文書の評価**
+
+```bash
+curl -X POST "http://localhost:8000/v1/evaluation" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "document_content": "この文書には個人情報が含まれています。",
+    "context": "情報公開請求",
+    "provider": "anthropic"
+  }'
+```
+
+**バッチ評価**
+
+```bash
+curl -X POST "http://localhost:8000/v1/batch" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "documents": [
+      {
+        "document_id": "doc_001",
+        "content": "第一の文書内容"
+      },
+      {
+        "document_id": "doc_002",
+        "content": "第二の文書内容"
+      }
+    ],
+    "batch_options": {
+      "max_concurrent": 3,
+      "timeout_per_document": 300
+    }
+  }'
+```
+
+**ステータス確認**
+
+```bash
+curl -X GET "http://localhost:8000/v1/status/batch_20250105_123456"
+```
+
+#### 設定オプション
+
+環境変数で設定可能なオプション：
+
+| 変数名                  | 説明                 | デフォルト             |
+| ----------------------- | -------------------- | ---------------------- |
+| `DEBUG`                 | デバッグモード       | `false`                |
+| `ENVIRONMENT`           | 環境名               | `development`          |
+| `SECRET_KEY`            | JWT シークレットキー | `your-secret-key-here` |
+| `OPENAI_API_KEY`        | OpenAI API キー      | -                      |
+| `ANTHROPIC_API_KEY`     | Anthropic API キー   | -                      |
+| `AWS_ACCESS_KEY_ID`     | AWS アクセスキー     | -                      |
+| `AWS_SECRET_ACCESS_KEY` | AWS シークレットキー | -                      |
+| `AWS_REGION`            | AWS リージョン       | `us-east-1`            |
+
+#### 認証
+
+API キー認証または JWT トークン認証をサポート：
+
+```bash
+# API キー認証
+curl -X GET "http://localhost:8000/v1/health" \
+  -H "X-API-Key: your-api-key"
+
+# JWT トークン認証
+curl -X GET "http://localhost:8000/v1/health" \
+  -H "Authorization: Bearer your-jwt-token"
+```
+
+#### レート制限
+
+- デフォルト: 100 リクエスト/分/クライアント
+- 設定可能: `RATE_LIMIT_REQUESTS` 環境変数で調整
+
+### AWS Lambda API を使用する場合
+
+#### デプロイメント
+
+```bash
+# AWS SAM を使用してデプロイ
+cd deployment/lambda
+./deploy.sh
+
+# または手動でデプロイ
+sam build
+sam deploy --guided
+```
+
+#### API エンドポイント
+
+```bash
+# ヘルスチェック
+curl -X POST https://your-api-gateway-url/health \
+  -H "Content-Type: application/json" \
+  -d '{}'
+
+# 単一文書評価
+curl -X POST https://your-api-gateway-url/evaluate \
+  -H "Content-Type: application/json" \
+  -d '{
+    "document_content": "評価対象の情報",
+    "context": "追加のコンテキスト情報",
+    "output_text": "出力テキスト",
+    "provider": "openai"
+  }'
+
+# バッチ処理開始
+curl -X POST https://your-api-gateway-url/batch \
+  -H "Content-Type: application/json" \
+  -d '{
+    "documents": [
+      {
+        "file_path": "document1.txt",
+        "file_name": "document1.txt",
+        "context": "コンテキスト",
+        "output_text": "出力テキスト"
+      }
+    ]
+  }'
+
+# バッチ処理状態確認
+curl -X POST https://your-api-gateway-url/status \
+  -H "Content-Type: application/json" \
+  -d '{
+    "batch_id": "batch_20250105_123456"
+  }'
+```
+
+#### ローカルテスト
+
+```bash
+# ローカルで Lambda 関数をテスト
+python deployment/lambda/test_lambda.py
+```
 
 ### 基本的な使用方法
 
@@ -187,6 +364,8 @@ python evaluator.py --batch-results batch_20251005_001441 --format csv
 
 ## システム要件
 
+### 基本的な要件
+
 - **Python**: 3.8 以上
 - **LLM API**: 以下のいずれか
   - OpenAI API キー（GPT-4 以上推奨）
@@ -194,7 +373,17 @@ python evaluator.py --batch-results batch_20251005_001441 --format csv
   - AWS 認証情報（Bedrock アクセス権限付き）
 - **依存関係**: requirements.txt に記載
 
+### AWS Lambda API 要件
+
+- **AWS CLI**: 最新版
+- **AWS SAM CLI**: 最新版
+- **AWS アカウント**: Lambda と API Gateway のアクセス権限
+- **IAM ロール**: Lambda 実行ロール（Bedrock アクセス権限含む）
+- **環境変数**: Lambda 環境での API キー設定
+
 ## インストール
+
+### 基本的なインストール
 
 ```bash
 # リポジトリのクローン
@@ -215,6 +404,24 @@ export ANTHROPIC_API_KEY="your-api-key-here"
 export AWS_ACCESS_KEY_ID="your-access-key-id"
 export AWS_SECRET_ACCESS_KEY="your-secret-access-key"
 export AWS_REGION="us-east-1"
+```
+
+### AWS Lambda API のインストール
+
+```bash
+# AWS SAM CLI のインストール
+# macOS
+brew install aws-sam-cli
+
+# Linux
+pip install aws-sam-cli
+
+# AWS CLI の設定
+aws configure
+
+# Lambda デプロイメント用の依存関係をインストール
+cd deployment/lambda
+pip install -r requirements.txt
 ```
 
 ### 環境変数の設定
@@ -246,6 +453,8 @@ AWS_REGION=us-east-1
 
 ### 主要コンポーネント
 
+#### コア評価エンジン
+
 - **LLMProvider**: LLM プロバイダーの抽象基底クラス
   - `OpenAIProvider`: OpenAI API 実装
   - `AnthropicProvider`: Anthropic API 実装
@@ -255,6 +464,9 @@ AWS_REGION=us-east-1
 - **CriterionEvaluator**: 単一 criteria の評価管理
 - **ResultAggregator**: 評価結果の処理
 - **DisclosureEvaluator**: メイン評価オーケストレーター
+
+#### バッチ処理システム
+
 - **BatchEvaluator**: 複数文書の一括評価オーケストレーター
 - **DocumentDiscoveryService**: 文書ファイルの自動発見とフィルタリング
 - **ParallelDocumentProcessingService**: 並行文書処理とタイムアウト管理
@@ -262,6 +474,15 @@ AWS_REGION=us-east-1
 - **BatchConfiguration**: バッチ処理の設定管理（並行数、タイムアウト、リトライ等）
 - **BatchDocument**: 個別文書の処理状態管理
 - **BatchProgress**: バッチ処理の進捗追跡
+
+#### AWS Lambda API システム
+
+- **LambdaHandler**: AWS Lambda 関数のメインエントリーポイント
+- **EvaluationService**: 単一文書評価のサービス層
+- **BatchService**: バッチ処理のサービス層
+- **StatusService**: バッチ状態確認のサービス層
+- **LambdaSettings**: Lambda 環境用の設定管理
+- **Request/Response Models**: Pydantic モデルによる型安全な API インターフェース
 
 ### 設計原則
 
@@ -321,7 +542,18 @@ AWS_REGION=us-east-1
 
 ```
 disclosure-evaluator/
-├── criteria/                          # 評価基準定義ファイル
+├── api/                              # AWS Lambda API システム
+│   ├── lambda_handler.py             # Lambda 関数のメインエントリーポイント
+│   ├── models/                       # Pydantic モデル
+│   │   ├── requests.py              # リクエストモデル
+│   │   └── responses.py             # レスポンスモデル
+│   ├── services/                     # サービス層
+│   │   ├── evaluation_service.py    # 単一文書評価サービス
+│   │   ├── batch_service.py         # バッチ処理サービス
+│   │   └── status_service.py        # 状態確認サービス
+│   └── config/                       # 設定管理
+│       └── settings.py              # Lambda 設定
+├── criteria/                         # 評価基準定義ファイル
 │   ├── disclosure_evaluation_criteria.json
 │   ├── administrative_information_non_disclosure.json
 │   └── multi-criteria_decision_making_framework.json
@@ -331,9 +563,22 @@ disclosure-evaluator/
 │   └── user_step_template.md        # ユーザープロンプトテンプレート
 ├── tests/                            # テストファイル
 │   ├── unit/                        # 単体テスト
-│   └── integration/                 # 統合テスト
+│   ├── integration/                 # 統合テスト
+│   └── api/                         # API テスト
+│       └── test_lambda_handler.py   # Lambda ハンドラーテスト
+├── deployment/                       # デプロイメント設定
+│   └── lambda/                       # AWS Lambda デプロイメント
+│       ├── template.yaml            # SAM テンプレート
+│       ├── requirements.txt         # Lambda 依存関係
+│       ├── deploy.sh                # デプロイスクリプト
+│       ├── test_lambda.py           # ローカルテストスクリプト
+│       └── README.md                # Lambda デプロイメントガイド
 ├── specs/                           # 仕様書・設計書
-│   └── 001-/                       # バッチ処理機能の仕様
+│   ├── 001-/                        # バッチ処理機能の仕様
+│   └── 003-api/                    # API 機能の仕様
+│       ├── plan.md                 # 実装計画
+│       └── contracts/              # API 契約
+│           └── openapi.yaml        # OpenAPI 仕様
 ├── batch_state/                     # バッチ処理状態ファイル（自動生成）
 │   ├── active_batches/              # 処理中のバッチ
 │   │   ├── batch_YYYYMMDD_HHMMSS.json        # バッチ状態ファイル

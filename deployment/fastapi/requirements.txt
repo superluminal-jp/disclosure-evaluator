@@ -1,0 +1,46 @@
+# FastAPI dependencies
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+pydantic==2.5.0
+pydantic-settings==2.1.0
+
+# HTTP client
+httpx==0.25.2
+requests==2.31.0
+
+# Database (optional)
+sqlalchemy==2.0.23
+alembic==1.13.1
+
+# Redis (for caching and rate limiting)
+redis==5.0.1
+
+# Monitoring and logging
+prometheus-client==0.19.0
+structlog==23.2.0
+
+# Testing
+pytest==7.4.3
+pytest-asyncio==0.21.1
+pytest-cov==4.1.0
+httpx==0.25.2
+
+# Development
+black==23.11.0
+isort==5.12.0
+flake8==6.1.0
+mypy==1.7.1
+
+# Security
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+python-multipart==0.0.6
+
+# AWS (if using Bedrock)
+boto3==1.34.0
+botocore==1.34.0
+
+# Existing evaluator dependencies
+# (These should match the main requirements.txt)
+openai==1.3.7
+anthropic==0.7.8

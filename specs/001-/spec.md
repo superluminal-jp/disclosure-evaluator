@@ -1,7 +1,7 @@
 # Feature Specification: 複数文書の一括評価
 
 **Feature Branch**: `001-`  
-**Created**: 2025-01-04  
+**Created**: 2025-10-04  
 **Status**: Draft  
 **Input**: User description: "複数文書の一括評価: 複数の文書を同時に評価し、効率的な処理を実現"
 

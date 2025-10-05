@@ -1,0 +1,3 @@
+"""
+FastAPI API tests module.
+"""
