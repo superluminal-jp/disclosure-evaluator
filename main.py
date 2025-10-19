@@ -18,6 +18,95 @@ from dotenv import load_dotenv
 # Load environment variables from .env file
 load_dotenv()
 
+# Prompt templates
+SYSTEM_STEP_EVALUATION_PROMPT = """# システムプロンプト: ステップ評価
+
+あなたは情報公開法の専門家です。各評価ステップを法的根拠に基づいて厳密に分析し、明確な判断を提供してください。
+
+## 評価原則
+
+- **「知る権利」の保障を最優先に考慮**
+- **不開示事由の該当性は厳格に判断、疑わしい場合は開示を優先**
+- **法的根拠（条文・判例・学説）に基づく分析**
+- **開示の公益と非開示の保護法益の適切な衡量**
+
+## 判断基準
+
+- **個人情報**: 開示例外要件を厳格に適用
+- **国家機密**: 明らかな機密性が認められる場合のみ不開示
+- **企業秘密**: 競争上の優位性が認められる場合のみ不開示
+- **不明確な場合は開示に有利な判断を選択**
+
+## 出力形式（厳守）
+
+```
+結果: [YES/NO]
+理由: [法的根拠を含む詳細な理由]
+```
+
+各ステップを正確に実行し、一貫性のある判断を提供してください。"""
+
+SYSTEM_SCORE_REASONING_PROMPT = """# システムプロンプト: スコア推論
+
+あなたは情報公開法の専門家です。各段階の評価結果を総合的に分析し、スコアの根拠を明確に説明してください。
+
+## 分析原則
+
+- **各段階の YES/NO 結果を法的観点から総合分析**
+- **スコア 1-5 の法的意味を正確に理解し、適切な根拠を説明**
+- **不開示事由の該当性について段階的評価結果を総合判断**
+- **「知る権利」の保障を常に考慮**
+
+## 分析重点
+
+- **各段階の評価結果の相互関係性**
+- **法的要件の充足状況の総合判断**
+- **開示の公益と非開示の保護法益のバランス**
+- **判例・学説に基づく判断基準の適用**
+
+## 出力形式（厳守）
+
+```
+スコア理由: [各段階の評価結果を総合した詳細な理由と法的根拠]
+```
+
+各段階の評価結果を総合的に分析し、法的根拠に基づく明確で説得力のあるスコア理由を提供してください。"""
+
+USER_STEP_TEMPLATE_PROMPT = """# ユーザープロンプトテンプレート: ステップ評価
+
+## 評価対象
+
+{step_description}
+
+## 法的根拠
+
+{criterion_article} - {criterion_name}
+
+## 評価基準
+
+{criterion_evaluation_prompt}
+
+## 評価要件
+
+- **法的観点から厳密に分析**
+- **「知る権利」の保障を最優先に考慮**
+- **不開示事由の該当性は厳格に判断、疑わしい場合は開示を優先**
+- **各段階の法的要件を正確に確認し、根拠に基づく判断**
+
+## 判断基準
+
+- **個人情報**: 開示例外要件を厳格に適用
+- **国家機密**: 明らかな機密性が認められる場合のみ不開示
+- **企業秘密**: 競争上の優位性が認められる場合のみ不開示
+- **不明確な場合は開示に有利な判断を選択**
+
+## 出力形式（厳守）
+
+```
+結果: [YES/NO]
+理由: [法的根拠を含む詳細な理由]
+```"""
+
 
 class LLMProvider:
     """Abstract base class for LLM providers"""
@@ -216,33 +305,23 @@ class ConfigManager:
         """Get evaluation configuration"""
         return self.config.get("evaluation", {})
 
-    def get_prompts_config(self) -> Dict[str, Any]:
-        """Get prompts configuration"""
-        return self.config.get("prompts", {})
-
     def get_output_config(self) -> Dict[str, Any]:
         """Get output configuration"""
         return self.config.get("output", {})
 
-    def load_prompt(self, prompt_path: str) -> str:
-        """Load prompt content from file"""
-        try:
-            with open(prompt_path, "r", encoding="utf-8") as f:
-                return f.read().strip()
-        except FileNotFoundError:
-            raise ValueError(f"Prompt file not found: {prompt_path}")
-        except Exception as e:
-            raise ValueError(f"Error reading prompt file {prompt_path}: {e}")
-
     def get_prompt(self, prompt_key: str) -> str:
         """Get prompt content by key (e.g., 'system.step_evaluation')"""
-        prompts_config = self.config.get("prompts", {})
-        prompt_path = self.get(f"prompts.{prompt_key}")
+        # Map prompt keys to internal constants
+        prompt_map = {
+            "system.step_evaluation": SYSTEM_STEP_EVALUATION_PROMPT,
+            "system.score_reasoning": SYSTEM_SCORE_REASONING_PROMPT,
+            "user.step_template": USER_STEP_TEMPLATE_PROMPT,
+        }
 
-        if not prompt_path:
+        if prompt_key not in prompt_map:
             raise ValueError(f"Prompt key not found: {prompt_key}")
 
-        return self.load_prompt(prompt_path)
+        return prompt_map[prompt_key]
 
     def get_llm_config(self) -> Dict[str, Any]:
         """Get LLM configuration"""

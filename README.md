@@ -1,594 +1,379 @@
-# Disclosure Evaluator
-
-高度な情報公開法評価システム - 日本の情報公開法に基づく段階的評価と LLM 活用による詳細分析
+# 情報公開法評価システム (Disclosure Evaluator)
 
 ## 概要
 
-このシステムは、日本の情報公開法（行政機関の保有する情報の公開に関する法律）に基づいて、情報の開示可能性を段階的に評価します。各不開示事由について詳細な評価を行い、ユーザーが適切な判断を行えるよう包括的な情報を提供します。
+情報公開法評価システムは、情報公開法第 5 条に基づく 6 つの不開示事由を体系的に評価するための AI 駆動システムです。大規模言語モデル（LLM）を活用し、行政機関が保有する情報の開示・非開示判断を支援します。
 
-## 主な機能
+### 主要機能
 
-- **段階的評価**: 各不開示事由について複数の段階で詳細評価
-- **マルチプロバイダー対応**: OpenAI、Anthropic Claude、AWS Bedrock (Claude/Nova) をサポート
-- **構造化出力**: JSON 形式と人間が読みやすいサマリー形式
-- **詳細な理由**: 各評価段階の詳細な理由と法的根拠
-- **ユーザー判断支援**: システムが判断を下すのではなく、判断に必要な情報を提供
-- **構造化ログ**: 相関 ID による追跡可能なログ出力
-- **バッチ処理**: 複数の文書を並列処理で効率的に評価
-- **進捗追跡**: リアルタイムでのバッチ処理進捗監視
-- **状態永続化**: バッチ処理の中断・再開対応
-- **エラーハンドリング**: 個別文書の失敗処理とリトライ機能
-- **AWS Lambda API**: サーバーレス API による外部システム連携
-- **FastAPI REST API**: 高性能な HTTP エンドポイントによる評価リクエスト処理
-- **RESTful API**: HTTP エンドポイントによる評価リクエスト処理
+- **段階的評価プロセス**: 情報公開法第 5 条の各不開示事由について、法的根拠に基づく段階的評価を実施
+- **複数 LLM プロバイダー対応**: OpenAI、Anthropic、AWS Bedrock など複数の LLM プロバイダーをサポート
+- **バッチ処理機能**: 大量の文書を効率的に処理
+- **並列処理**: 最大 30 の並列ワーカーによる高速処理
+- **詳細な評価基準**: 各不開示事由について具体的な評価基準とスコアリング（1-5 スケール）
 
-## 評価対象の不開示事由
+## 特徴
 
-1. **個人情報保護** (第 5 条第 1 号)
-2. **法人等情報保護** (第 5 条第 2 号)
-3. **国家安全保障** (第 5 条第 3 号)
-4. **公共の安全と秩序** (第 5 条第 4 号)
-5. **内部審議等** (第 5 条第 5 号)
-6. **行政運営等** (第 5 条第 6 号)
+### LLM ベースの段階的評価プロセス
 
-## 使用方法
+- 情報公開法の専門知識に基づく厳密な評価
+- 「知る権利」の保障を最優先に考慮
+- 不開示事由の該当性を厳格に判断
+- 疑わしい場合は開示に有利な判断を選択
 
-### FastAPI REST API を使用する場合
+### 対応 LLM プロバイダー
 
-#### クイックスタート
+- **OpenAI**: GPT-4、GPT-5-nano
+- **Anthropic**: Claude Sonnet 4
+- **AWS Bedrock**: Claude Sonnet 4、Amazon Nova Premier
 
-```bash
-# 依存関係のインストール
-pip install -r deployment/fastapi/requirements.txt
+### バッチ処理機能
 
-# 環境変数の設定
-export OPENAI_API_KEY="your_openai_api_key_here"
-export ANTHROPIC_API_KEY="your_anthropic_api_key_here"
+- フォルダ単位での一括処理
+- 特定ファイルの選択的処理
+- 処理状況の追跡と管理
+- 失敗した文書の再処理
 
-# FastAPI アプリケーションの起動
-uvicorn api.main:app --reload --host 0.0.0.0 --port 8000
-```
+### 並列処理サポート
 
-#### Docker を使用したデプロイメント
-
-```bash
-# Docker Compose を使用
-cd deployment/fastapi
-docker-compose up -d
-
-# 個別の Docker コンテナ
-docker build -f deployment/fastapi/Dockerfile -t disclosure-evaluator-fastapi .
-docker run -p 8000:8000 -e OPENAI_API_KEY=your_key disclosure-evaluator-fastapi
-```
-
-#### API エンドポイント
-
-- **ヘルスチェック**: `GET /v1/health`
-- **単一文書評価**: `POST /v1/evaluation`
-- **バッチ評価**: `POST /v1/batch`
-- **ステータス確認**: `GET /v1/status/{request_id}`
-- **API ドキュメント**: `GET /docs`
-
-#### 使用例
-
-**単一文書の評価**
-
-```bash
-curl -X POST "http://localhost:8000/v1/evaluation" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "document_content": "この文書には個人情報が含まれています。",
-    "context": "情報公開請求",
-    "provider": "anthropic"
-  }'
-```
-
-**バッチ評価**
-
-```bash
-curl -X POST "http://localhost:8000/v1/batch" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "documents": [
-      {
-        "document_id": "doc_001",
-        "content": "第一の文書内容"
-      },
-      {
-        "document_id": "doc_002",
-        "content": "第二の文書内容"
-      }
-    ],
-    "batch_options": {
-      "max_concurrent": 3,
-      "timeout_per_document": 300
-    }
-  }'
-```
-
-**ステータス確認**
-
-```bash
-curl -X GET "http://localhost:8000/v1/status/batch_20250105_123456"
-```
-
-#### 設定オプション
-
-環境変数で設定可能なオプション：
-
-| 変数名                  | 説明                 | デフォルト             |
-| ----------------------- | -------------------- | ---------------------- |
-| `DEBUG`                 | デバッグモード       | `false`                |
-| `ENVIRONMENT`           | 環境名               | `development`          |
-| `SECRET_KEY`            | JWT シークレットキー | `your-secret-key-here` |
-| `OPENAI_API_KEY`        | OpenAI API キー      | -                      |
-| `ANTHROPIC_API_KEY`     | Anthropic API キー   | -                      |
-| `AWS_ACCESS_KEY_ID`     | AWS アクセスキー     | -                      |
-| `AWS_SECRET_ACCESS_KEY` | AWS シークレットキー | -                      |
-| `AWS_REGION`            | AWS リージョン       | `us-east-1`            |
-
-#### 認証
-
-API キー認証または JWT トークン認証をサポート：
-
-```bash
-# API キー認証
-curl -X GET "http://localhost:8000/v1/health" \
-  -H "X-API-Key: your-api-key"
-
-# JWT トークン認証
-curl -X GET "http://localhost:8000/v1/health" \
-  -H "Authorization: Bearer your-jwt-token"
-```
-
-#### レート制限
-
-- デフォルト: 100 リクエスト/分/クライアント
-- 設定可能: `RATE_LIMIT_REQUESTS` 環境変数で調整
-
-### AWS Lambda API を使用する場合
-
-#### デプロイメント
-
-```bash
-# AWS SAM を使用してデプロイ
-cd deployment/lambda
-./deploy.sh
-
-# または手動でデプロイ
-sam build
-sam deploy --guided
-```
-
-#### API エンドポイント
-
-```bash
-# ヘルスチェック
-curl -X POST https://your-api-gateway-url/health \
-  -H "Content-Type: application/json" \
-  -d '{}'
-
-# 単一文書評価
-curl -X POST https://your-api-gateway-url/evaluate \
-  -H "Content-Type: application/json" \
-  -d '{
-    "document_content": "評価対象の情報",
-    "context": "追加のコンテキスト情報",
-    "output_text": "出力テキスト",
-    "provider": "openai"
-  }'
-
-# バッチ処理開始
-curl -X POST https://your-api-gateway-url/batch \
-  -H "Content-Type: application/json" \
-  -d '{
-    "documents": [
-      {
-        "file_path": "document1.txt",
-        "file_name": "document1.txt",
-        "context": "コンテキスト",
-        "output_text": "出力テキスト"
-      }
-    ]
-  }'
-
-# バッチ処理状態確認
-curl -X POST https://your-api-gateway-url/status \
-  -H "Content-Type: application/json" \
-  -d '{
-    "batch_id": "batch_20250105_123456"
-  }'
-```
-
-#### ローカルテスト
-
-```bash
-# ローカルで Lambda 関数をテスト
-python deployment/lambda/test_lambda.py
-```
-
-### 基本的な使用方法
-
-#### OpenAI を使用する場合
-
-```bash
-# OpenAI APIキーを設定
-export OPENAI_API_KEY="your-api-key-here"
-
-# 基本的な評価
-python evaluator.py "評価対象の情報"
-
-# コンテキスト付き評価
-python evaluator.py "評価対象の情報" "追加のコンテキスト情報"
-
-# 出力テキスト付き評価
-python evaluator.py "評価対象の情報" "コンテキスト" "出力テキスト"
-```
-
-#### Anthropic Claude を使用する場合
-
-```bash
-# Anthropic APIキーを設定
-export ANTHROPIC_API_KEY="your-api-key-here"
-
-# 基本的な評価
-python evaluator.py "評価対象の情報"
-
-# プロバイダーを明示的に指定
-python evaluator.py "評価対象の情報" --provider anthropic
-```
-
-#### AWS Bedrock を使用する場合
-
-```bash
-# AWS認証情報を設定
-export AWS_ACCESS_KEY_ID="your-access-key-id"
-export AWS_SECRET_ACCESS_KEY="your-secret-access-key"
-export AWS_REGION="us-east-1"
-
-# Anthropic Claude Sonnet 4 を使用
-python evaluator.py "評価対象の情報" --provider bedrock
-
-# Amazon Nova Premier を使用
-python evaluator.py "評価対象の情報" --provider bedrock_nova
-```
-
-### 出力形式の選択
-
-```bash
-# JSON形式で出力
-python evaluator.py "情報の内容" --format json
-
-# 人間が読みやすいサマリー形式で出力（デフォルト）
-python evaluator.py "情報の内容" --format summary
-```
-
-### 複数文書の一括評価（バッチ処理）
-
-```bash
-# フォルダ内の全文書を一括評価
-python evaluator.py --batch --folder ./documents
-
-# 特定のファイルタイプのみを評価
-python evaluator.py --batch --folder ./documents --file-types "text/plain"
-
-# 並行処理数を指定して評価
-python evaluator.py --batch --folder ./documents --max-workers 4
-
-# コンテキスト付きで一括評価
-python evaluator.py --batch --folder ./documents --context "追加のコンテキスト情報"
-
-# 特定のファイルを指定して評価
-python evaluator.py --batch --documents file1.txt,file2.pdf
-
-# バッチ処理の進捗確認
-python evaluator.py --batch-status batch_20251005_001441
-
-# バッチ処理の結果取得
-python evaluator.py --batch-results batch_20251005_001441 --format json
-
-# バッチ処理の再開
-python evaluator.py --resume-batch batch_20251005_001441
-
-# 特定のドキュメントの再処理
-python evaluator.py --retry-documents batch_20251005_001441 doc_001,doc_002
-```
-
-## 実行例
-
-### 個人情報の評価（OpenAI 使用）
-
-```bash
-python evaluator.py "私の名前は、山田太郎です。私の住所は、東京都千代田区永田町1-7-1です。私の電話番号は、03-1234-5678です。" --provider openai
-```
-
-### 個人情報の評価（Anthropic Claude 使用）
-
-```bash
-python evaluator.py "私の名前は、山田太郎です。私の住所は、東京都千代田区永田町1-7-1です。私の電話番号は、03-1234-5678です。" --provider anthropic
-```
-
-### 法人情報の評価
-
-```bash
-python evaluator.py "当社の売上高は前年比120%増の50億円を記録しました。主要取引先はA社、B社、C社です。"
-```
-
-### 複数文書の一括評価例
-
-```bash
-# 複数の文書ファイルを一括評価
-python evaluator.py --batch --folder ./documents --provider openai
-
-# 特定のファイルタイプ（テキストファイル）のみを評価
-python evaluator.py --batch --folder ./documents --file-types "text/plain"
-
-# 並行処理数を指定して高速処理
-python evaluator.py --batch --folder ./documents --max-workers 4 --timeout 300
-
-# バッチ処理の進捗確認
-python evaluator.py --batch-status batch_20251005_001441
-
-# バッチ処理の結果取得（JSON形式）
-python evaluator.py --batch-results batch_20251005_001441 --format json
-
-# バッチ処理の結果取得（CSV形式）
-python evaluator.py --batch-results batch_20251005_001441 --format csv
-```
-
-## 出力例
-
-### サマリー形式の出力
-
-```
-# 情報公開法評価結果
-
-## 評価対象
-私の名前は、山田太郎です。私の住所は、東京都千代田区永田町1-7-1です。私の電話番号は、03-1234-5678です。
-
-## 評価サマリー
-- **評価criteria数**: 6
-- **評価完了時刻**: 2025-09-28T20:41:12.377448
-
-## 各不開示事由の評価
-
-### ⚠️ 個人情報保護 (第5条第1号)
-- **スコア**: 3/5
-- **スコア理由**: 段階1から段階3までの評価では、提供された情報が特定の個人を識別できるものであり、個人のプライバシーや権利利益を害するおそれがあるため、情報公開法第5条第1号に基づく不開示事由に該当すると判断されました。
-
-**段階的評価**:
-- 段階1: 個人に関する情報（事業を営む個人の当該事業に関する情報を除く。）か: YES - 提供された情報は、特定の個人である山田太郎氏に関するものであり、氏名、住所、電話番号といった個人を識別できる情報が含まれています。
-- 段階2: 特定の個人を識別することができるものか: YES - 提供された情報には、氏名（山田太郎）、住所（東京都千代田区永田町1-7-1）、電話番号（03-1234-5678）が含まれており、これらの情報は特定の個人を識別することが可能です。
-...
-```
-
-## システム要件
-
-### 基本的な要件
-
-- **Python**: 3.8 以上
-- **LLM API**: 以下のいずれか
-  - OpenAI API キー（GPT-4 以上推奨）
-  - Anthropic API キー（Claude 3.5 Sonnet 以上推奨）
-  - AWS 認証情報（Bedrock アクセス権限付き）
-- **依存関係**: requirements.txt に記載
-
-### AWS Lambda API 要件
-
-- **AWS CLI**: 最新版
-- **AWS SAM CLI**: 最新版
-- **AWS アカウント**: Lambda と API Gateway のアクセス権限
-- **IAM ロール**: Lambda 実行ロール（Bedrock アクセス権限含む）
-- **環境変数**: Lambda 環境での API キー設定
+- 最大 30 の並列ワーカー
+- タイムアウト設定（デフォルト 300 秒）
+- リトライ機能（最大 3 回）
+- ファイルサイズ制限（デフォルト 50MB）
 
 ## インストール
 
-### 基本的なインストール
+### 前提条件
+
+- Python 3.12 以上
+- pip（Python パッケージマネージャー）
+
+### セットアップ手順
+
+1. **リポジトリのクローン**
 
 ```bash
-# リポジトリのクローン
 git clone <repository-url>
 cd disclosure-evaluator
-
-# 依存関係のインストール
-pip install -r requirements.txt
-
-# 環境変数の設定（.envファイルまたは直接設定）
-# OpenAI を使用する場合
-export OPENAI_API_KEY="your-api-key-here"
-
-# Anthropic を使用する場合
-export ANTHROPIC_API_KEY="your-api-key-here"
-
-# AWS Bedrock を使用する場合
-export AWS_ACCESS_KEY_ID="your-access-key-id"
-export AWS_SECRET_ACCESS_KEY="your-secret-access-key"
-export AWS_REGION="us-east-1"
 ```
 
-### AWS Lambda API のインストール
+2. **仮想環境の作成とアクティベート**
 
 ```bash
-# AWS SAM CLI のインストール
-# macOS
-brew install aws-sam-cli
+python -m venv venv
+source venv/bin/activate  # Linux/Mac
+# または
+venv\Scripts\activate  # Windows
+```
 
-# Linux
-pip install aws-sam-cli
+3. **依存関係のインストール**
 
-# AWS CLI の設定
-aws configure
-
-# Lambda デプロイメント用の依存関係をインストール
-cd deployment/lambda
+```bash
 pip install -r requirements.txt
 ```
+
+### 必要な依存関係
+
+- pydantic>=2.0.0
+- python-dotenv>=1.0.0
+- openai>=1.0.0
+- anthropic>=0.60.0
+- boto3>=1.39.0
+- pytest>=7.0.0（テスト用）
+
+## 設定
 
 ### 環境変数の設定
 
-認証情報は環境変数で管理されます。プロジェクトルートに `.env` ファイルを作成して設定することも可能です：
+`.env`ファイルを作成し、使用する LLM プロバイダーの API キーを設定してください：
 
 ```bash
-# .envファイルの作成（テンプレートからコピー）
-cp .env.example .env
-
-# .envファイルを編集して、使用するプロバイダーのAPIキーを設定してください
-# 以下のいずれか1つ以上を設定する必要があります：
-
-# OpenAI を使用する場合
+# OpenAI使用の場合
 OPENAI_API_KEY=your_openai_api_key_here
 
-# Anthropic を使用する場合
+# Anthropic使用の場合
 ANTHROPIC_API_KEY=your_anthropic_api_key_here
 
-# AWS Bedrock を使用する場合
-AWS_ACCESS_KEY_ID=your_aws_access_key_id_here
-AWS_SECRET_ACCESS_KEY=your_aws_secret_access_key_here
+# AWS Bedrock使用の場合
+AWS_ACCESS_KEY_ID=your_aws_access_key_id
+AWS_SECRET_ACCESS_KEY=your_aws_secret_access_key
 AWS_REGION=us-east-1
 ```
 
-**注意**: `.env` ファイルには機密情報が含まれるため、バージョン管理には含めないでください。
+### config.json の設定
 
-## アーキテクチャ
+`config.json`ファイルでシステムの動作をカスタマイズできます：
 
-### 主要コンポーネント
+```json
+{
+  "application": {
+    "name": "Disclosure Evaluator",
+    "version": "2.0.0"
+  },
+  "llm": {
+    "provider": "anthropic",
+    "anthropic": {
+      "model": "claude-sonnet-4-5-20250929",
+      "temperature": 0.1,
+      "max_tokens": 2000,
+      "timeout": 30
+    }
+  },
+  "evaluation": {
+    "parallel": {
+      "enabled": true,
+      "max_workers": 30,
+      "timeout": 300
+    }
+  }
+}
+```
 
-#### コア評価エンジン
+## 使用方法
 
-- **LLMProvider**: LLM プロバイダーの抽象基底クラス
-  - `OpenAIProvider`: OpenAI API 実装
-  - `AnthropicProvider`: Anthropic API 実装
-  - `BedrockAnthropicProvider`: AWS Bedrock Claude 実装
-  - `BedrockNovaProvider`: AWS Bedrock Nova 実装
-- **StepEvaluator**: 個別評価ステップの実行
-- **CriterionEvaluator**: 単一 criteria の評価管理
-- **ResultAggregator**: 評価結果の処理
-- **DisclosureEvaluator**: メイン評価オーケストレーター
+### 単一文書の評価
 
-#### バッチ処理システム
+```bash
+# 基本的な使用方法
+python main.py "評価対象の文書内容" "追加の文脈情報" "出力ファイル名"
 
-- **BatchEvaluator**: 複数文書の一括評価オーケストレーター
-- **DocumentDiscoveryService**: 文書ファイルの自動発見とフィルタリング
-- **ParallelDocumentProcessingService**: 並行文書処理とタイムアウト管理
-- **BatchStatePersistenceService**: バッチ処理状態の永続化と復元
-- **BatchConfiguration**: バッチ処理の設定管理（並行数、タイムアウト、リトライ等）
-- **BatchDocument**: 個別文書の処理状態管理
-- **BatchProgress**: バッチ処理の進捗追跡
+# 出力形式を指定
+python main.py "文書内容" "文脈" "出力" --format json
 
-#### AWS Lambda API システム
+# LLMプロバイダーを指定
+python main.py "文書内容" "文脈" "出力" --provider anthropic
+```
 
-- **LambdaHandler**: AWS Lambda 関数のメインエントリーポイント
-- **EvaluationService**: 単一文書評価のサービス層
-- **BatchService**: バッチ処理のサービス層
-- **StatusService**: バッチ状態確認のサービス層
-- **LambdaSettings**: Lambda 環境用の設定管理
-- **Request/Response Models**: Pydantic モデルによる型安全な API インターフェース
+### バッチ処理
 
-### 設計原則
+```bash
+# フォルダ内の全文書を処理
+python main.py --batch --folder /path/to/documents
 
-- **Provider Pattern**: LLM プロバイダーの切り替え可能な設計
-- **Pydantic Models**: 型安全なデータ検証
-- **Structured Logging**: 構造化ログによる追跡可能性
-- **Error Handling**: 包括的なエラーハンドリングとフォールバック
-- **Parallel Processing**: 複数文書の並行処理による効率化
-- **State Persistence**: バッチ処理状態の永続化による中断・再開対応
-- **Retry Mechanism**: 失敗時の自動リトライ機能
-- **Progress Tracking**: リアルタイム進捗監視とコールバック
-- **Error Recovery**: 個別文書の失敗処理とバッチ継続
-- **Result Aggregation**: 複数文書の評価結果統合
+# 特定のファイルを処理
+python main.py --batch --documents file1.txt,file2.pdf,file3.docx
 
-## 技術仕様
+# 並列ワーカー数を指定
+python main.py --batch --folder /path/to/documents --max-workers 10
 
-### 評価フロー
+# ファイルサイズ制限を設定
+python main.py --batch --folder /path/to/documents --file-size-limit 10000000
+```
 
-#### 単一文書評価
+### バッチ処理の管理
 
-1. **入力検証**: 評価対象情報の検証
-2. **プロバイダー選択**: 指定された LLM プロバイダーの初期化
-3. **段階的評価**: 各 criteria について複数段階で評価
-4. **LLM 分析**: 選択されたモデルによる詳細な法的分析
-5. **結果集約**: 評価結果の構造化
-6. **出力生成**: JSON/サマリー形式での出力
+```bash
+# バッチ処理の状況確認
+python main.py --batch-status <batch_id>
 
-#### 複数文書一括評価（バッチ処理）
+# バッチ処理の結果取得
+python main.py --batch-results <batch_id> --format json
 
-1. **文書発見**: 指定フォルダ内の文書ファイルの自動発見
-2. **フィルタリング**: ファイルタイプ、サイズ、除外パターンによる絞り込み
-3. **バッチ作成**: 評価対象文書のバッチ作成と状態管理
-4. **並行処理**: 複数文書の並行評価（設定可能なワーカー数）
-5. **進捗追跡**: リアルタイム進捗監視とコールバック
-6. **エラーハンドリング**: 個別文書の失敗処理とリトライ
-7. **結果集約**: 全文書の評価結果の統合
-8. **状態永続化**: 処理状態の保存と中断・再開対応
-9. **結果出力**: JSON/CSV 形式での結果出力
-10. **バッチ管理**: バッチ状態の確認、結果取得、再開機能
+# 失敗した文書の再処理
+python main.py --retry-documents <batch_id> <document_id1,document_id2>
+```
 
-### ログ機能
+## 評価基準
 
-- **構造化ログ**: JSON 形式でのログ出力（`logs/` ディレクトリに保存）
-- **相関 ID**: リクエスト追跡のための相関 ID
-- **エラーハンドリング**: 包括的なエラー処理とフォールバック
-- **タイムスタンプ付きログ**: 各評価実行ごとに独立したログファイル生成
+### 情報公開法第 5 条の 6 つの不開示事由
 
-### プロンプト管理
+1. **個人情報保護**（第 5 条第 1 号）
 
-評価に使用される LLM プロンプトは `prompts/` ディレクトリで管理されています：
+   - 個人に関する情報の識別可能性
+   - 個人の権利利益への影響
+   - 開示例外要件の適用
 
-- **system_step_evaluation.md**: 各評価ステップの実行に使用するシステムプロンプト
-- **system_score_reasoning.md**: 最終スコア算出の推論に使用するシステムプロンプト
-- **user_step_template.md**: ユーザープロンプトのテンプレート
+2. **法人等情報保護**（第 5 条第 2 号）
 
-## プロジェクト構造
+   - 法人等の競争上の地位への影響
+   - 正当な利益の保護
+   - 任意提供情報の条件
+
+3. **国家安全保障**（第 5 条第 3 号）
+
+   - 国の安全への影響
+   - 国際関係への影響
+   - 外交交渉への影響
+
+4. **公共の安全と秩序**（第 5 条第 4 号）
+
+   - 犯罪の予防・鎮圧・捜査への影響
+   - 公訴の維持・刑の執行への影響
+   - 公共の安全と秩序の維持
+
+5. **内部審議等**（第 5 条第 5 号）
+
+   - 率直な意見交換の保護
+   - 意思決定の中立性
+   - 国民の混乱防止
+
+6. **行政運営等**（第 5 条第 6 号）
+   - 監査・検査・取締り等への影響
+   - 契約・交渉・争訟への影響
+   - 調査研究・人事管理への影響
+
+### スコアリング基準（1-5 スケール）
+
+- **1**: 明確に不開示事由に該当し、不開示が必要
+- **2**: 不開示事由に該当し、不開示が適切
+- **3**: 不開示事由の該当性があり、慎重な検討が必要
+- **4**: 不開示事由の該当性は低く、開示を検討可能
+- **5**: 不開示事由に該当せず、開示が適切
+
+## 開発者向け情報
+
+### プロジェクト構造
 
 ```
 disclosure-evaluator/
-├── api/                              # AWS Lambda API システム
-│   ├── lambda_handler.py             # Lambda 関数のメインエントリーポイント
-│   ├── models/                       # Pydantic モデル
-│   │   ├── requests.py              # リクエストモデル
-│   │   └── responses.py             # レスポンスモデル
-│   ├── services/                     # サービス層
-│   │   ├── evaluation_service.py    # 単一文書評価サービス
-│   │   ├── batch_service.py         # バッチ処理サービス
-│   │   └── status_service.py        # 状態確認サービス
-│   └── config/                       # 設定管理
-│       └── settings.py              # Lambda 設定
-├── criteria/                         # 評価基準定義ファイル
-│   ├── disclosure_evaluation_criteria.json
-│   ├── administrative_information_non_disclosure.json
-│   └── multi-criteria_decision_making_framework.json
-├── prompts/                          # LLM プロンプトテンプレート
-│   ├── system_step_evaluation.md    # ステップ評価用システムプロンプト
-│   ├── system_score_reasoning.md    # スコア推論用システムプロンプト
-│   └── user_step_template.md        # ユーザープロンプトテンプレート
-├── tests/                            # テストファイル
-│   ├── unit/                        # 単体テスト
-│   ├── integration/                 # 統合テスト
-│   └── api/                         # API テスト
-│       └── test_lambda_handler.py   # Lambda ハンドラーテスト
-├── deployment/                       # デプロイメント設定
-│   └── lambda/                       # AWS Lambda デプロイメント
-│       ├── template.yaml            # SAM テンプレート
-│       ├── requirements.txt         # Lambda 依存関係
-│       ├── deploy.sh                # デプロイスクリプト
-│       ├── test_lambda.py           # ローカルテストスクリプト
-│       └── README.md                # Lambda デプロイメントガイド
-├── specs/                           # 仕様書・設計書
-│   ├── 001-/                        # バッチ処理機能の仕様
-│   └── 003-api/                    # API 機能の仕様
-│       ├── plan.md                 # 実装計画
-│       └── contracts/              # API 契約
-│           └── openapi.yaml        # OpenAPI 仕様
-├── batch_state/                     # バッチ処理状態ファイル（自動生成）
-│   ├── active_batches/              # 処理中のバッチ
-│   │   ├── batch_YYYYMMDD_HHMMSS.json        # バッチ状態ファイル
-│   │   └── batch_YYYYMMDD_HHMMSS_documents.json  # ドキュメント情報ファイル
-│   └── completed_batches/           # 完了したバッチ
-├── logs/                             # 評価ログファイル（自動生成）
-├── outputs/                          # 評価結果出力ファイル（自動生成）
-├── evaluator.py                      # メイン評価スクリプト
-├── config.json                       # システム設定ファイル
-├── requirements.txt                  # Python 依存関係
-├── .env.example                      # 環境変数テンプレート
-└── README.md                         # このファイル
+├── main.py                   # メイン評価システム
+├── config.json              # システム設定
+├── requirements.txt          # 依存関係
+├── criteria/
+│   └── disclosure_evaluation_criteria.json  # 評価基準
+└── venv/                    # 仮想環境
 ```
+
+### アーキテクチャ概要
+
+- **ConfigManager**: 設定管理
+- **LLMProvider**: LLM プロバイダーの抽象化
+- **DisclosureEvaluator**: メイン評価ロジック
+- **BatchProcessor**: バッチ処理管理
+- **EvaluationCriteria**: 評価基準の管理
+
+### 主要コンポーネント
+
+#### LLMProvider クラス
+
+```python
+class LLMProvider:
+    def generate_response(self, messages: List[Dict[str, str]]) -> str:
+        """LLMからの応答を生成"""
+        raise NotImplementedError
+```
+
+#### 評価プロセス
+
+1. 文書の前処理と分類
+2. 各不開示事由の段階的評価
+3. LLM による専門的判断
+4. スコアの算出と根拠の生成
+5. 総合的な開示判断
+
+### カスタマイズ方法
+
+#### 新しい LLM プロバイダーの追加
+
+```python
+class CustomProvider(LLMProvider):
+    def __init__(self, config: Dict[str, Any]):
+        super().__init__(config)
+        # カスタムプロバイダーの初期化
+
+    def generate_response(self, messages: List[Dict[str, str]]) -> str:
+        # カスタムプロバイダーの実装
+        pass
+```
+
+#### 評価基準のカスタマイズ
+
+`criteria/disclosure_evaluation_criteria.json`を編集して、評価基準をカスタマイズできます。
+
+## 出力形式
+
+### JSON 形式
+
+```json
+{
+  "document_id": "doc_001",
+  "evaluation_results": {
+    "article_5_1": {
+      "score": 2,
+      "reasoning": "個人情報保護規定に該当する可能性が高い",
+      "steps": [
+        {
+          "step": "個人に関する情報か",
+          "result": "YES",
+          "reasoning": "氏名、住所等の個人識別情報が含まれている"
+        }
+      ]
+    }
+  },
+  "overall_decision": "不開示",
+  "confidence": 0.85
+}
+```
+
+### サマリー形式
+
+```
+=== 評価結果サマリー ===
+文書ID: doc_001
+総合判断: 不開示
+信頼度: 85%
+
+【個人情報保護】
+スコア: 2/5
+判断: 不開示の可能性が高い
+理由: 個人識別情報が含まれ、開示例外に該当しない
+```
+
+### CSV 形式
+
+```csv
+document_id,criterion,score,decision,confidence
+doc_001,article_5_1,2,non_disclosure,0.85
+doc_001,article_5_2,5,disclosure,0.90
+```
+
+## トラブルシューティング
+
+### よくある問題
+
+#### API キーの設定エラー
+
+```
+Error: API key not found
+```
+
+**解決方法**: `.env`ファイルに API キーが正しく設定されているか確認してください。
+
+#### メモリ不足エラー
+
+```
+Error: Out of memory
+```
+
+**解決方法**: `config.json`の`max_workers`を減らすか、`file_size_limit`を小さくしてください。
+
+#### タイムアウトエラー
+
+```
+Error: Request timeout
+```
+
+**解決方法**: `config.json`の`timeout`値を増やすか、文書サイズを小さくしてください。
+
+### ログの確認
+
+システムは詳細なログを出力します。ログレベルを調整するには`config.json`を編集してください：
+
+```json
+{
+  "logging": {
+    "level": "DEBUG",
+    "format": "{\"timestamp\": \"%(asctime)s\", \"level\": \"%(levelname)s\", \"message\": \"%(message)s\"}"
+  }
+}
+```
+
+### エラーハンドリング
+
+- **リトライ機能**: 失敗したリクエストは自動的に再試行されます（最大 3 回）
+- **フォールバック**: LLM エラー時はデフォルトスコア（3）が適用されます
+- **部分処理**: バッチ処理中に一部の文書でエラーが発生しても、他の文書の処理は継続されます
+
+---
+
+**注意**: このシステムは情報公開法の専門的判断を支援するツールです。最終的な開示・非開示判断は、法務専門家による検討が必要です。
