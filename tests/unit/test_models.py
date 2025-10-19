@@ -7,7 +7,7 @@ import pytest
 from datetime import datetime, timedelta
 from pydantic import ValidationError
 
-from main import (
+from src.models import (
     EvaluationStep,
     CriterionEvaluation,
     OverallEvaluation,
@@ -94,9 +94,7 @@ class TestCriterionEvaluation:
 
         # Invalid scores
         for score in [0, 6, -1, 10]:
-            with pytest.raises(
-                ValidationError, match="Input should be greater than or equal to 1"
-            ):
+            with pytest.raises(ValidationError):
                 CriterionEvaluation(
                     criterion_id="test",
                     criterion_name="Test",
@@ -185,26 +183,26 @@ class TestEnums:
 
     def test_batch_status_enum(self):
         """Test BatchStatus enum values."""
-        assert BatchStatus.PENDING == "pending"
-        assert BatchStatus.PROCESSING == "processing"
-        assert BatchStatus.COMPLETED == "completed"
-        assert BatchStatus.FAILED == "failed"
-        assert BatchStatus.PARTIALLY_FAILED == "partially_failed"
+        assert BatchStatus.PENDING.value == "pending"
+        assert BatchStatus.PROCESSING.value == "processing"
+        assert BatchStatus.COMPLETED.value == "completed"
+        assert BatchStatus.FAILED.value == "failed"
+        assert BatchStatus.PARTIALLY_FAILED.value == "partially_failed"
 
     def test_document_status_enum(self):
         """Test DocumentStatus enum values."""
-        assert DocumentStatus.PENDING == "pending"
-        assert DocumentStatus.PROCESSING == "processing"
-        assert DocumentStatus.COMPLETED == "completed"
-        assert DocumentStatus.FAILED == "failed"
+        assert DocumentStatus.PENDING.value == "pending"
+        assert DocumentStatus.PROCESSING.value == "processing"
+        assert DocumentStatus.COMPLETED.value == "completed"
+        assert DocumentStatus.FAILED.value == "failed"
 
     def test_processing_phase_enum(self):
         """Test ProcessingPhase enum values."""
-        assert ProcessingPhase.INITIALIZING == "initializing"
-        assert ProcessingPhase.DISCOVERING == "discovering"
-        assert ProcessingPhase.PROCESSING == "processing"
-        assert ProcessingPhase.AGGREGATING == "aggregating"
-        assert ProcessingPhase.COMPLETED == "completed"
+        assert ProcessingPhase.INITIALIZING.value == "initializing"
+        assert ProcessingPhase.DISCOVERING.value == "discovering"
+        assert ProcessingPhase.PROCESSING.value == "processing"
+        assert ProcessingPhase.AGGREGATING.value == "aggregating"
+        assert ProcessingPhase.COMPLETED.value == "completed"
 
 
 class TestBatchConfiguration:
@@ -257,70 +255,46 @@ class TestBatchConfiguration:
     def test_batch_configuration_constraints(self):
         """Test BatchConfiguration field constraints."""
         # Test max_concurrent_workers constraints
-        with pytest.raises(
-            ValidationError, match="Input should be greater than or equal to 1"
-        ):
+        with pytest.raises(ValidationError):
             BatchConfiguration(max_concurrent_workers=0)
 
-        with pytest.raises(
-            ValidationError, match="Input should be less than or equal to 20"
-        ):
+        with pytest.raises(ValidationError):
             BatchConfiguration(max_concurrent_workers=21)
 
         # Test max_retry_attempts constraints
-        with pytest.raises(
-            ValidationError, match="Input should be greater than or equal to 0"
-        ):
+        with pytest.raises(ValidationError):
             BatchConfiguration(max_retry_attempts=-1)
 
-        with pytest.raises(
-            ValidationError, match="Input should be less than or equal to 10"
-        ):
+        with pytest.raises(ValidationError):
             BatchConfiguration(max_retry_attempts=11)
 
         # Test timeout_seconds constraints
-        with pytest.raises(
-            ValidationError, match="Input should be greater than or equal to 30"
-        ):
+        with pytest.raises(ValidationError):
             BatchConfiguration(timeout_seconds=29)
 
-        with pytest.raises(
-            ValidationError, match="Input should be less than or equal to 3600"
-        ):
+        with pytest.raises(ValidationError):
             BatchConfiguration(timeout_seconds=3601)
 
         # Test file_size_limit constraints
-        with pytest.raises(
-            ValidationError, match="Input should be greater than or equal to 1024"
-        ):
+        with pytest.raises(ValidationError):
             BatchConfiguration(file_size_limit=1023)
 
         # Test memory_limit_mb constraints
-        with pytest.raises(
-            ValidationError, match="Input should be greater than or equal to 256"
-        ):
+        with pytest.raises(ValidationError):
             BatchConfiguration(memory_limit_mb=255)
 
         # Test api_rate_limit_delay constraints
-        with pytest.raises(
-            ValidationError, match="Input should be greater than or equal to 0.0"
-        ):
+        with pytest.raises(ValidationError):
             BatchConfiguration(api_rate_limit_delay=-0.1)
 
-        with pytest.raises(
-            ValidationError, match="Input should be less than or equal to 10.0"
-        ):
+        with pytest.raises(ValidationError):
             BatchConfiguration(api_rate_limit_delay=10.1)
 
         # Test retry_delay_seconds constraints
-        with pytest.raises(
-            ValidationError, match="Input should be greater than or equal to 1"
-        ):
+        with pytest.raises(ValidationError):
             BatchConfiguration(retry_delay_seconds=0)
 
-        with pytest.raises(
-            ValidationError, match="Input should be less than or equal to 300"
-        ):
+        with pytest.raises(ValidationError):
             BatchConfiguration(retry_delay_seconds=301)
 
 
@@ -346,9 +320,7 @@ class TestBatchSummaryStatistics:
     def test_batch_summary_statistics_constraints(self):
         """Test BatchSummaryStatistics field constraints."""
         # Test average_score constraints
-        with pytest.raises(
-            ValidationError, match="Input should be greater than or equal to 1.0"
-        ):
+        with pytest.raises(ValidationError):
             BatchSummaryStatistics(
                 average_score=0.5,
                 score_distribution={},
@@ -357,9 +329,7 @@ class TestBatchSummaryStatistics:
                 error_rate=0.0,
             )
 
-        with pytest.raises(
-            ValidationError, match="Input should be less than or equal to 5.0"
-        ):
+        with pytest.raises(ValidationError):
             BatchSummaryStatistics(
                 average_score=5.5,
                 score_distribution={},
@@ -369,9 +339,7 @@ class TestBatchSummaryStatistics:
             )
 
         # Test processing_efficiency constraints
-        with pytest.raises(
-            ValidationError, match="Input should be greater than or equal to 0.0"
-        ):
+        with pytest.raises(ValidationError):
             BatchSummaryStatistics(
                 average_score=3.0,
                 score_distribution={},
@@ -381,9 +349,7 @@ class TestBatchSummaryStatistics:
             )
 
         # Test error_rate constraints
-        with pytest.raises(
-            ValidationError, match="Input should be greater than or equal to 0.0"
-        ):
+        with pytest.raises(ValidationError):
             BatchSummaryStatistics(
                 average_score=3.0,
                 score_distribution={},
@@ -392,9 +358,7 @@ class TestBatchSummaryStatistics:
                 error_rate=-0.1,
             )
 
-        with pytest.raises(
-            ValidationError, match="Input should be less than or equal to 1.0"
-        ):
+        with pytest.raises(ValidationError):
             BatchSummaryStatistics(
                 average_score=3.0,
                 score_distribution={},

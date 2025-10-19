@@ -9,8 +9,8 @@ from unittest.mock import Mock, patch, MagicMock, mock_open
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from main import (
-    BatchEvaluator,
+from src.batch import BatchEvaluator
+from src.models import (
     BatchConfiguration,
     DocumentInput,
     BatchDocument,
@@ -45,8 +45,11 @@ class TestBatchProcessingWorkflow:
                     mock_state_service = Mock()
                     # 修正: active_dirのモックを適切に設定
                     from pathlib import Path
+
                     mock_active_dir = Mock(spec=Path)
-                    mock_active_dir.__truediv__ = Mock(return_value=Path("/tmp/test_batch_documents.json"))
+                    mock_active_dir.__truediv__ = Mock(
+                        return_value=Path("/tmp/test_batch_documents.json")
+                    )
                     mock_state_service.active_dir = mock_active_dir
                     mock_state_class.return_value = mock_state_service
 
@@ -152,8 +155,11 @@ class TestBatchProcessingWorkflow:
                     mock_state_service = Mock()
                     # 修正: active_dirのモックを適切に設定
                     from pathlib import Path
+
                     mock_active_dir = Mock(spec=Path)
-                    mock_active_dir.__truediv__ = Mock(return_value=Path("/tmp/test_batch_documents.json"))
+                    mock_active_dir.__truediv__ = Mock(
+                        return_value=Path("/tmp/test_batch_documents.json")
+                    )
                     mock_state_service.active_dir = mock_active_dir
                     mock_state_class.return_value = mock_state_service
 
@@ -258,8 +264,11 @@ class TestBatchProcessingWorkflow:
                     mock_state_service = Mock()
                     # 修正: active_dirのモックを適切に設定
                     from pathlib import Path
+
                     mock_active_dir = Mock(spec=Path)
-                    mock_active_dir.__truediv__ = Mock(return_value=Path("/tmp/test_batch_documents.json"))
+                    mock_active_dir.__truediv__ = Mock(
+                        return_value=Path("/tmp/test_batch_documents.json")
+                    )
                     mock_state_service.active_dir = mock_active_dir
                     mock_state_class.return_value = mock_state_service
 
@@ -391,8 +400,11 @@ class TestBatchProcessingWorkflow:
                     mock_state_service = Mock()
                     # 修正: active_dirのモックを適切に設定
                     from pathlib import Path
+
                     mock_active_dir = Mock(spec=Path)
-                    mock_active_dir.__truediv__ = Mock(return_value=Path("/tmp/test_batch_documents.json"))
+                    mock_active_dir.__truediv__ = Mock(
+                        return_value=Path("/tmp/test_batch_documents.json")
+                    )
                     mock_state_service.active_dir = mock_active_dir
                     mock_state_class.return_value = mock_state_service
 
@@ -465,8 +477,11 @@ class TestBatchProcessingWorkflow:
                     mock_state_service = Mock()
                     # 修正: active_dirのモックを適切に設定
                     from pathlib import Path
+
                     mock_active_dir = Mock(spec=Path)
-                    mock_active_dir.__truediv__ = Mock(return_value=Path("/tmp/test_batch_documents.json"))
+                    mock_active_dir.__truediv__ = Mock(
+                        return_value=Path("/tmp/test_batch_documents.json")
+                    )
                     mock_state_service.active_dir = mock_active_dir
                     mock_state_class.return_value = mock_state_service
 
@@ -567,8 +582,11 @@ class TestBatchProcessingWorkflow:
                     mock_state_service = Mock()
                     # 修正: active_dirのモックを適切に設定
                     from pathlib import Path
+
                     mock_active_dir = Mock(spec=Path)
-                    mock_active_dir.__truediv__ = Mock(return_value=Path("/tmp/test_batch_documents.json"))
+                    mock_active_dir.__truediv__ = Mock(
+                        return_value=Path("/tmp/test_batch_documents.json")
+                    )
                     mock_state_service.active_dir = mock_active_dir
                     mock_state_class.return_value = mock_state_service
 
@@ -654,10 +672,14 @@ class TestBatchProcessingWorkflow:
                                         assert progress is not None
                                         assert progress.batch_id == batch_id
                                         assert progress.total_documents == 2
-                                        assert progress.processed_documents == 1  # Based on mock_batch_state
+                                        assert (
+                                            progress.processed_documents == 1
+                                        )  # Based on mock_batch_state
                                         assert progress.successful_documents == 1
                                         assert progress.failed_documents == 0
-                                        assert progress.progress_percentage == 50.0  # 1/2 * 100
+                                        assert (
+                                            progress.progress_percentage == 50.0
+                                        )  # 1/2 * 100
 
     def test_batch_processing_workflow_results_generation(
         self, test_batch_configuration, mock_openai_client
@@ -722,11 +744,14 @@ class TestBatchProcessingWorkflow:
                     mock_state_service = Mock()
                     # 修正: active_dirのモックを適切に設定
                     from pathlib import Path
+
                     mock_active_dir = Mock(spec=Path)
-                    mock_active_dir.__truediv__ = Mock(return_value=Path("/tmp/test_batch_documents.json"))
+                    mock_active_dir.__truediv__ = Mock(
+                        return_value=Path("/tmp/test_batch_documents.json")
+                    )
                     mock_state_service.active_dir = mock_active_dir
                     mock_state_class.return_value = mock_state_service
-                    
+
                     with patch(
                         "main.create_llm_provider", return_value=mock_openai_client
                     ):
@@ -795,8 +820,11 @@ class TestBatchProcessingWorkflow:
                     mock_state_service = Mock()
                     # 修正: active_dirのモックを適切に設定
                     from pathlib import Path
+
                     mock_active_dir = Mock(spec=Path)
-                    mock_active_dir.__truediv__ = Mock(return_value=Path("/tmp/test_batch_documents.json"))
+                    mock_active_dir.__truediv__ = Mock(
+                        return_value=Path("/tmp/test_batch_documents.json")
+                    )
                     mock_state_service.active_dir = mock_active_dir
                     mock_state_class.return_value = mock_state_service
 
@@ -890,8 +918,11 @@ class TestBatchProcessingWorkflow:
                     mock_state_service = Mock()
                     # 修正: active_dirのモックを適切に設定
                     from pathlib import Path
+
                     mock_active_dir = Mock(spec=Path)
-                    mock_active_dir.__truediv__ = Mock(return_value=Path("/tmp/test_batch_documents.json"))
+                    mock_active_dir.__truediv__ = Mock(
+                        return_value=Path("/tmp/test_batch_documents.json")
+                    )
                     mock_state_service.active_dir = mock_active_dir
                     mock_state_class.return_value = mock_state_service
 

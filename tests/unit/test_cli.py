@@ -8,8 +8,9 @@ from unittest.mock import Mock, patch, MagicMock
 import sys
 from io import StringIO
 
-from main import (
-    main,
+from src.evaluators import evaluate_disclosure
+from src.utils import format_structured_output
+from src.cli import (
     print_usage,
     handle_single_document_evaluation,
     handle_batch_command,
@@ -17,8 +18,6 @@ from main import (
     handle_batch_results_command,
     handle_resume_batch_command,
     handle_retry_documents_command,
-    evaluate_disclosure,
-    format_structured_output,
 )
 
 
@@ -266,7 +265,7 @@ class TestHandleBatchCommand:
     def test_handle_batch_command_folder_success(self, mock_sys_argv, mock_print):
         """Test successful batch command with folder."""
         with patch("sys.argv", ["main.py", "--batch", "--folder", "/test/path"]):
-            with patch("main.BatchEvaluator") as mock_evaluator_class:
+            with patch("src.batch.evaluator.BatchEvaluator") as mock_evaluator_class:
                 mock_evaluator = Mock()
                 mock_evaluator.create_batch_from_folder.return_value = "batch_001"
                 mock_evaluator.start_batch.return_value = None
@@ -283,7 +282,7 @@ class TestHandleBatchCommand:
         with patch(
             "sys.argv", ["main.py", "--batch", "--documents", "doc1.txt,doc2.txt"]
         ):
-            with patch("main.BatchEvaluator") as mock_evaluator_class:
+            with patch("src.batch.evaluator.BatchEvaluator") as mock_evaluator_class:
                 mock_evaluator = Mock()
                 mock_evaluator.create_batch.return_value = "batch_001"
                 mock_evaluator.start_batch.return_value = None
@@ -336,7 +335,7 @@ class TestHandleBatchCommand:
                 "json,csv",
             ],
         ):
-            with patch("main.BatchEvaluator") as mock_evaluator_class:
+            with patch("src.batch.evaluator.BatchEvaluator") as mock_evaluator_class:
                 mock_evaluator = Mock()
                 mock_evaluator.create_batch_from_folder.return_value = "batch_001"
                 mock_evaluator.start_batch.return_value = None
@@ -373,7 +372,7 @@ class TestHandleBatchCommand:
     ):
         """Test batch command with missing folder argument."""
         with patch("sys.argv", ["main.py", "--batch", "--folder"]):
-            with patch("main.BatchEvaluator") as mock_evaluator_class:
+            with patch("src.batch.evaluator.BatchEvaluator") as mock_evaluator_class:
                 mock_evaluator = Mock()
                 mock_evaluator.create_batch_from_folder.return_value = "batch_001"
                 mock_evaluator.start_batch.return_value = None
@@ -389,7 +388,7 @@ class TestHandleBatchCommand:
     ):
         """Test batch command with missing documents argument."""
         with patch("sys.argv", ["main.py", "--batch", "--documents"]):
-            with patch("main.BatchEvaluator") as mock_evaluator_class:
+            with patch("src.batch.evaluator.BatchEvaluator") as mock_evaluator_class:
                 mock_evaluator = Mock()
                 mock_evaluator.create_batch.return_value = "batch_001"
                 mock_evaluator.start_batch.return_value = None
@@ -407,7 +406,7 @@ class TestHandleBatchStatusCommand:
     def test_handle_batch_status_command_success(self, mock_sys_argv, mock_print):
         """Test successful batch status command."""
         with patch("sys.argv", ["main.py", "--batch-status", "batch_001"]):
-            with patch("main.BatchEvaluator") as mock_evaluator_class:
+            with patch("src.batch.evaluator.BatchEvaluator") as mock_evaluator_class:
                 mock_evaluator = Mock()
                 mock_batch = Mock()
                 mock_batch.status.value = "processing"
@@ -430,7 +429,7 @@ class TestHandleBatchStatusCommand:
     ):
         """Test batch status command with batch not found."""
         with patch("sys.argv", ["main.py", "--batch-status", "nonexistent_batch"]):
-            with patch("main.BatchEvaluator") as mock_evaluator_class:
+            with patch("src.batch.evaluator.BatchEvaluator") as mock_evaluator_class:
                 mock_evaluator = Mock()
                 mock_evaluator.get_batch.return_value = None
                 mock_evaluator_class.return_value = mock_evaluator
@@ -476,7 +475,7 @@ class TestHandleBatchResultsCommand:
     def test_handle_batch_results_command_success(self, mock_sys_argv, mock_print):
         """Test successful batch results command."""
         with patch("sys.argv", ["main.py", "--batch-results", "batch_001"]):
-            with patch("main.BatchEvaluator") as mock_evaluator_class:
+            with patch("src.batch.evaluator.BatchEvaluator") as mock_evaluator_class:
                 mock_evaluator = Mock()
                 mock_result = Mock()
                 mock_evaluator.get_batch_results.return_value = mock_result
@@ -494,7 +493,7 @@ class TestHandleBatchResultsCommand:
         with patch(
             "sys.argv", ["main.py", "--batch-results", "batch_001", "--format", "csv"]
         ):
-            with patch("main.BatchEvaluator") as mock_evaluator_class:
+            with patch("src.batch.evaluator.BatchEvaluator") as mock_evaluator_class:
                 mock_evaluator = Mock()
                 mock_result = Mock()
                 mock_evaluator.get_batch_results.return_value = mock_result
@@ -540,7 +539,7 @@ class TestHandleResumeBatchCommand:
     def test_handle_resume_batch_command_success(self, mock_sys_argv, mock_print):
         """Test successful resume batch command."""
         with patch("sys.argv", ["main.py", "--resume-batch", "batch_001"]):
-            with patch("main.BatchEvaluator") as mock_evaluator_class:
+            with patch("src.batch.evaluator.BatchEvaluator") as mock_evaluator_class:
                 mock_evaluator = Mock()
                 mock_evaluator.resume_batch.return_value = None
                 mock_evaluator_class.return_value = mock_evaluator
@@ -567,7 +566,7 @@ class TestHandleResumeBatchCommand:
     ):
         """Test resume batch command with exception."""
         with patch("sys.argv", ["main.py", "--resume-batch", "batch_001"]):
-            with patch("main.BatchEvaluator", side_effect=Exception("Resume failed")):
+            with patch("src.batch.evaluator.BatchEvaluator", side_effect=Exception("Resume failed")):
                 handle_resume_batch_command()
 
                 mock_print.assert_called_with("Error: Resume failed", file=sys.stderr)
@@ -582,7 +581,7 @@ class TestHandleRetryDocumentsCommand:
         with patch(
             "sys.argv", ["main.py", "--retry-documents", "batch_001", "doc_001,doc_002"]
         ):
-            with patch("main.BatchEvaluator") as mock_evaluator_class:
+            with patch("src.batch.evaluator.BatchEvaluator") as mock_evaluator_class:
                 mock_evaluator = Mock()
                 mock_evaluator.retry_failed_documents.return_value = None
                 mock_evaluator_class.return_value = mock_evaluator
@@ -625,7 +624,7 @@ class TestHandleRetryDocumentsCommand:
         with patch(
             "sys.argv", ["main.py", "--retry-documents", "batch_001", "doc_001"]
         ):
-            with patch("main.BatchEvaluator", side_effect=Exception("Retry failed")):
+            with patch("src.batch.evaluator.BatchEvaluator", side_effect=Exception("Retry failed")):
                 handle_retry_documents_command()
 
                 mock_print.assert_called_with("Error: Retry failed", file=sys.stderr)
@@ -639,7 +638,7 @@ class TestEvaluateDisclosureLegacyFunction:
         self, mock_env_vars, mock_openai_client
     ):
         """Test successful evaluate_disclosure legacy function."""
-        with patch("main.DisclosureEvaluator") as mock_evaluator_class:
+        with patch("src.evaluators.disclosure_evaluator.DisclosureEvaluator") as mock_evaluator_class:
             mock_evaluator = Mock()
             mock_result = Mock()
             mock_evaluator.evaluate_disclosure.return_value = mock_result
@@ -659,7 +658,7 @@ class TestEvaluateDisclosureLegacyFunction:
         self, mock_env_vars, mock_openai_client
     ):
         """Test evaluate_disclosure legacy function with default provider."""
-        with patch("main.DisclosureEvaluator") as mock_evaluator_class:
+        with patch("src.evaluators.disclosure_evaluator.DisclosureEvaluator") as mock_evaluator_class:
             mock_evaluator = Mock()
             mock_result = Mock()
             mock_evaluator.evaluate_disclosure.return_value = mock_result
@@ -679,6 +678,7 @@ class TestFormatStructuredOutput:
 
     def test_format_structured_output_json(self, sample_document_result):
         """Test format_structured_output with JSON format."""
+        from src.models.evaluation import DisclosureEvaluationResult
         result = DisclosureEvaluationResult(
             input_text="テスト入力",
             context="テストコンテキスト",
@@ -696,7 +696,7 @@ class TestFormatStructuredOutput:
 
     def test_format_structured_output_summary(self, sample_document_result):
         """Test format_structured_output with summary format."""
-        from main import CriterionEvaluation, EvaluationStep
+        from src.models.evaluation import CriterionEvaluation, EvaluationStep
 
         criterion_evaluation = CriterionEvaluation(
             criterion_id="article_5_1",
@@ -707,6 +707,7 @@ class TestFormatStructuredOutput:
             score_reasoning="スコア理由",
         )
 
+        from src.models.evaluation import DisclosureEvaluationResult
         result = DisclosureEvaluationResult(
             input_text="テスト入力",
             context="テストコンテキスト",
@@ -726,6 +727,7 @@ class TestFormatStructuredOutput:
 
     def test_format_structured_output_unsupported_format(self, sample_document_result):
         """Test format_structured_output with unsupported format."""
+        from src.models.evaluation import DisclosureEvaluationResult
         result = DisclosureEvaluationResult(
             input_text="テスト入力",
             context="テストコンテキスト",
@@ -741,7 +743,7 @@ class TestFormatStructuredOutput:
         self, sample_document_result
     ):
         """Test format_structured_output with high score (no warning)."""
-        from main import CriterionEvaluation, EvaluationStep
+        from src.models.evaluation import CriterionEvaluation, EvaluationStep
 
         criterion_evaluation = CriterionEvaluation(
             criterion_id="article_5_1",
@@ -752,6 +754,7 @@ class TestFormatStructuredOutput:
             score_reasoning="スコア理由",
         )
 
+        from src.models.evaluation import DisclosureEvaluationResult
         result = DisclosureEvaluationResult(
             input_text="テスト入力",
             context="テストコンテキスト",

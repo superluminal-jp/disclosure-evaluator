@@ -8,8 +8,8 @@ from unittest.mock import Mock, patch, MagicMock
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta
 
-from main import (
-    ParallelDocumentProcessingService,
+from src.batch import ParallelDocumentProcessingService
+from src.models import (
     BatchConfiguration,
     BatchDocument,
     DocumentStatus,

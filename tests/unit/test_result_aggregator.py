@@ -6,12 +6,8 @@ Tests lines 1281-1326: ResultAggregator class
 import pytest
 from unittest.mock import Mock, patch, MagicMock
 
-from main import (
-    ResultAggregator,
-    CriterionEvaluation,
-    EvaluationStep,
-    DisclosureEvaluationResult,
-)
+from src.evaluators import ResultAggregator
+from src.models import CriterionEvaluation, EvaluationStep, DisclosureEvaluationResult
 
 
 class TestResultAggregator:

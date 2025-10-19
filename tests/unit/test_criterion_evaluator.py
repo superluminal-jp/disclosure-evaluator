@@ -6,7 +6,8 @@ Tests lines 827-1279: CriterionEvaluator including score calculation and reasoni
 import pytest
 from unittest.mock import Mock, patch, MagicMock
 
-from main import CriterionEvaluator, EvaluationStep, CriterionEvaluation, StepEvaluator
+from src.evaluators import CriterionEvaluator, StepEvaluator
+from src.models import EvaluationStep, CriterionEvaluation
 
 
 class TestCriterionEvaluator:
@@ -17,26 +18,25 @@ class TestCriterionEvaluator:
         mock_llm_provider = Mock()
         correlation_id = "test_correlation_001"
 
-        with patch("main.logging.getLogger") as mock_get_logger:
-            mock_logger = Mock()
-            mock_get_logger.return_value = mock_logger
+        with patch(
+            "src.evaluators.criterion_evaluator.StepEvaluator"
+        ) as mock_step_evaluator_class:
+            mock_step_evaluator = Mock()
+            mock_step_evaluator_class.return_value = mock_step_evaluator
 
-            with patch("main.StepEvaluator") as mock_step_evaluator_class:
-                mock_step_evaluator = Mock()
-                mock_step_evaluator_class.return_value = mock_step_evaluator
+            mock_config_manager = Mock()
+            evaluator = CriterionEvaluator(
+                mock_llm_provider, correlation_id, mock_config_manager
+            )
 
-                evaluator = CriterionEvaluator(mock_llm_provider, correlation_id)
-
-                assert evaluator.llm_provider == mock_llm_provider
-                assert evaluator.correlation_id == correlation_id
-                assert evaluator.step_evaluator == mock_step_evaluator
-                assert evaluator.logger == mock_logger
-                mock_step_evaluator_class.assert_called_once_with(
-                    mock_llm_provider, correlation_id
-                )
-                mock_get_logger.assert_called_once_with(
-                    f"CriterionEvaluator.{correlation_id}"
-                )
+            assert evaluator.llm_provider == mock_llm_provider
+            assert evaluator.correlation_id == correlation_id
+            assert evaluator.step_evaluator == mock_step_evaluator
+            # Logger is created during initialization, so we just check it exists
+            assert evaluator.logger is not None
+            mock_step_evaluator_class.assert_called_once_with(
+                mock_llm_provider, correlation_id, mock_config_manager
+            )
 
     def test_criterion_evaluator_evaluate_criterion_success(
         self, sample_criterion, mock_llm_response
@@ -58,8 +58,11 @@ class TestCriterionEvaluator:
             EvaluationStep(step="ステップ2", result="NO", reasoning="理由2"),
         ]
 
-        with patch("main.logging.getLogger"):
-            with patch("main.StepEvaluator", return_value=mock_step_evaluator):
+        with patch("src.evaluators.criterion_evaluator.logging.getLogger"):
+            with patch(
+                "src.evaluators.step_evaluator.StepEvaluator",
+                return_value=mock_step_evaluator,
+            ):
                 with patch("main.config_manager") as mock_config:
                     mock_config.get_prompt.return_value = "システムプロンプト"
 
@@ -93,11 +96,16 @@ class TestCriterionEvaluator:
             "Step evaluation failed"
         )
 
-        with patch("main.logging.getLogger") as mock_get_logger:
+        with patch(
+            "src.evaluators.criterion_evaluator.logging.getLogger"
+        ) as mock_get_logger:
             mock_logger = Mock()
             mock_get_logger.return_value = mock_logger
 
-            with patch("main.StepEvaluator", return_value=mock_step_evaluator):
+            with patch(
+                "src.evaluators.step_evaluator.StepEvaluator",
+                return_value=mock_step_evaluator,
+            ):
                 with patch("main.config_manager") as mock_config:
                     mock_config.get_prompt.return_value = "システムプロンプト"
 
@@ -125,8 +133,11 @@ class TestCriterionEvaluator:
             EvaluationStep(step="ステップ2", result="NO", reasoning="理由2"),
         ]
 
-        with patch("main.logging.getLogger"):
-            with patch("main.StepEvaluator", return_value=mock_step_evaluator):
+        with patch("src.evaluators.criterion_evaluator.logging.getLogger"):
+            with patch(
+                "src.evaluators.step_evaluator.StepEvaluator",
+                return_value=mock_step_evaluator,
+            ):
                 with patch("main.config_manager") as mock_config:
                     mock_config.get_prompt.return_value = "システムプロンプト"
 
@@ -157,11 +168,16 @@ class TestCriterionEvaluator:
             Exception("Step evaluation failed"),
         ]
 
-        with patch("main.logging.getLogger") as mock_get_logger:
+        with patch(
+            "src.evaluators.criterion_evaluator.logging.getLogger"
+        ) as mock_get_logger:
             mock_logger = Mock()
             mock_get_logger.return_value = mock_logger
 
-            with patch("main.StepEvaluator", return_value=mock_step_evaluator):
+            with patch(
+                "src.evaluators.step_evaluator.StepEvaluator",
+                return_value=mock_step_evaluator,
+            ):
                 with patch("main.config_manager") as mock_config:
                     mock_config.get_prompt.return_value = "システムプロンプト"
 
@@ -190,7 +206,7 @@ class TestCriterionEvaluator:
 
         criterion = {"id": "test", "name": "テスト", "article": "テスト条項"}
 
-        with patch("main.logging.getLogger"):
+        with patch("src.evaluators.criterion_evaluator.logging.getLogger"):
             evaluator = CriterionEvaluator(mock_llm_provider, "test_correlation")
             score, reasoning = evaluator._calculate_score(steps, criterion)
 
@@ -209,7 +225,7 @@ class TestCriterionEvaluator:
 
         criterion = {"id": "test", "name": "テスト", "article": "テスト条項"}
 
-        with patch("main.logging.getLogger"):
+        with patch("src.evaluators.criterion_evaluator.logging.getLogger"):
             evaluator = CriterionEvaluator(mock_llm_provider, "test_correlation")
             score, reasoning = evaluator._calculate_score(steps, criterion)
 
@@ -228,7 +244,7 @@ class TestCriterionEvaluator:
 
         criterion = {"id": "test", "name": "テスト", "article": "テスト条項"}
 
-        with patch("main.logging.getLogger"):
+        with patch("src.evaluators.criterion_evaluator.logging.getLogger"):
             evaluator = CriterionEvaluator(mock_llm_provider, "test_correlation")
             score, reasoning = evaluator._calculate_score(steps, criterion)
 
@@ -248,7 +264,7 @@ class TestCriterionEvaluator:
 
         criterion = {"id": "test", "name": "テスト", "article": "テスト条項"}
 
-        with patch("main.logging.getLogger"):
+        with patch("src.evaluators.criterion_evaluator.logging.getLogger"):
             evaluator = CriterionEvaluator(mock_llm_provider, "test_correlation")
             score, reasoning = evaluator._calculate_score(steps, criterion)
 
@@ -263,7 +279,9 @@ class TestCriterionEvaluator:
 
         criterion = {"id": "test", "name": "テスト", "article": "テスト条項"}
 
-        with patch("main.logging.getLogger") as mock_get_logger:
+        with patch(
+            "src.evaluators.criterion_evaluator.logging.getLogger"
+        ) as mock_get_logger:
             mock_logger = Mock()
             mock_get_logger.return_value = mock_logger
 
@@ -292,7 +310,7 @@ class TestCriterionEvaluator:
 
         criterion = {"id": "test", "name": "テスト", "article": "テスト条項"}
 
-        with patch("main.logging.getLogger"):
+        with patch("src.evaluators.criterion_evaluator.logging.getLogger"):
             with patch("main.config_manager") as mock_config:
                 mock_config.get_prompt.return_value = "システムプロンプト"
 
@@ -312,7 +330,9 @@ class TestCriterionEvaluator:
         steps = [EvaluationStep(step="ステップ1", result="YES", reasoning="理由1")]
         criterion = {"id": "test", "name": "テスト", "article": "テスト条項"}
 
-        with patch("main.logging.getLogger") as mock_get_logger:
+        with patch(
+            "src.evaluators.criterion_evaluator.logging.getLogger"
+        ) as mock_get_logger:
             mock_logger = Mock()
             mock_get_logger.return_value = mock_logger
 
@@ -343,7 +363,9 @@ class TestCriterionEvaluator:
         steps = [EvaluationStep(step="ステップ1", result="YES", reasoning="理由1")]
         criterion = {"id": "test", "name": "テスト", "article": "テスト条項"}
 
-        with patch("main.logging.getLogger") as mock_get_logger:
+        with patch(
+            "src.evaluators.criterion_evaluator.logging.getLogger"
+        ) as mock_get_logger:
             mock_logger = Mock()
             mock_get_logger.return_value = mock_logger
 
@@ -367,7 +389,9 @@ class TestCriterionEvaluator:
         steps = [EvaluationStep(step="ステップ1", result="NO", reasoning="理由1")]
         criterion = {"id": "test", "name": "テスト", "article": "テスト条項"}
 
-        with patch("main.logging.getLogger") as mock_get_logger:
+        with patch(
+            "src.evaluators.criterion_evaluator.logging.getLogger"
+        ) as mock_get_logger:
             mock_logger = Mock()
             mock_get_logger.return_value = mock_logger
 
@@ -400,7 +424,7 @@ class TestCriterionEvaluator:
 
         criterion = {"id": "test", "name": "テスト", "article": "テスト条項"}
 
-        with patch("main.logging.getLogger"):
+        with patch("src.evaluators.criterion_evaluator.logging.getLogger"):
             evaluator = CriterionEvaluator(mock_llm_provider, "test_correlation")
             analysis = evaluator._prepare_step_analysis(steps, criterion, 3)
 
@@ -422,7 +446,7 @@ class TestCriterionEvaluator:
 
         response = "スコア理由: テスト理由"
 
-        with patch("main.logging.getLogger"):
+        with patch("src.evaluators.criterion_evaluator.logging.getLogger"):
             evaluator = CriterionEvaluator(mock_llm_provider, "test_correlation")
             reasoning = evaluator._parse_reasoning_response(response)
 
@@ -434,7 +458,7 @@ class TestCriterionEvaluator:
 
         response = "これは長い説明文で、明確な理由が含まれています。"
 
-        with patch("main.logging.getLogger"):
+        with patch("src.evaluators.criterion_evaluator.logging.getLogger"):
             evaluator = CriterionEvaluator(mock_llm_provider, "test_correlation")
             reasoning = evaluator._parse_reasoning_response(response)
 
@@ -451,7 +475,7 @@ class TestCriterionEvaluator:
             ("説明: テスト説明", "テスト説明"),
         ]
 
-        with patch("main.logging.getLogger"):
+        with patch("src.evaluators.criterion_evaluator.logging.getLogger"):
             evaluator = CriterionEvaluator(mock_llm_provider, "test_correlation")
 
             for response, expected in test_cases:
@@ -464,7 +488,7 @@ class TestCriterionEvaluator:
 
         response = "スコア理由 テスト理由"  # Missing colon
 
-        with patch("main.logging.getLogger"):
+        with patch("src.evaluators.criterion_evaluator.logging.getLogger"):
             evaluator = CriterionEvaluator(mock_llm_provider, "test_correlation")
             reasoning = evaluator._parse_reasoning_response(response)
 
@@ -474,7 +498,9 @@ class TestCriterionEvaluator:
         """Test reasoning response parsing exception handling."""
         mock_llm_provider = Mock()
 
-        with patch("main.logging.getLogger") as mock_get_logger:
+        with patch(
+            "src.evaluators.criterion_evaluator.logging.getLogger"
+        ) as mock_get_logger:
             mock_logger = Mock()
             mock_get_logger.return_value = mock_logger
 

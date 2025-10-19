@@ -8,8 +8,8 @@ import pytest
 from unittest.mock import Mock, patch, mock_open
 from pathlib import Path
 
-from main import (
-    ConfigManager,
+from src.config import ConfigManager
+from src.llm import (
     create_llm_provider,
     OpenAIProvider,
     AnthropicProvider,
@@ -210,7 +210,7 @@ class TestCreateLLMProvider:
 
     def test_create_llm_provider_openai(self, temp_config_file, mock_openai_client):
         """Test creating OpenAI provider."""
-        with patch("main.ConfigManager") as mock_config_class:
+        with patch("src.config.ConfigManager") as mock_config_class:
             mock_config = Mock()
             mock_config.get_current_provider.return_value = "openai"
             mock_config.get_provider_config.return_value = {
@@ -220,7 +220,7 @@ class TestCreateLLMProvider:
             }
             mock_config_class.return_value = mock_config
 
-            with patch("main.OpenAIProvider") as mock_provider_class:
+            with patch("src.llm.providers.OpenAIProvider") as mock_provider_class:
                 mock_provider = Mock()
                 mock_provider_class.return_value = mock_provider
 
@@ -234,7 +234,7 @@ class TestCreateLLMProvider:
         self, temp_config_file, mock_anthropic_client
     ):
         """Test creating Anthropic provider."""
-        with patch("main.ConfigManager") as mock_config_class:
+        with patch("src.config.ConfigManager") as mock_config_class:
             mock_config = Mock()
             mock_config.get_current_provider.return_value = "anthropic"
             mock_config.get_provider_config.return_value = {
@@ -244,7 +244,7 @@ class TestCreateLLMProvider:
             }
             mock_config_class.return_value = mock_config
 
-            with patch("main.AnthropicProvider") as mock_provider_class:
+            with patch("src.llm.providers.AnthropicProvider") as mock_provider_class:
                 mock_provider = Mock()
                 mock_provider_class.return_value = mock_provider
 
@@ -256,7 +256,7 @@ class TestCreateLLMProvider:
 
     def test_create_llm_provider_bedrock(self, temp_config_file, mock_bedrock_client):
         """Test creating Bedrock provider."""
-        with patch("main.ConfigManager") as mock_config_class:
+        with patch("src.config.ConfigManager") as mock_config_class:
             mock_config = Mock()
             mock_config.get_current_provider.return_value = "bedrock"
             mock_config.get_provider_config.return_value = {
@@ -266,7 +266,7 @@ class TestCreateLLMProvider:
             }
             mock_config_class.return_value = mock_config
 
-            with patch("main.BedrockAnthropicProvider") as mock_provider_class:
+            with patch("src.llm.providers.BedrockAnthropicProvider") as mock_provider_class:
                 mock_provider = Mock()
                 mock_provider_class.return_value = mock_provider
 
@@ -280,7 +280,7 @@ class TestCreateLLMProvider:
         self, temp_config_file, mock_bedrock_client
     ):
         """Test creating Bedrock Nova provider."""
-        with patch("main.ConfigManager") as mock_config_class:
+        with patch("src.config.ConfigManager") as mock_config_class:
             mock_config = Mock()
             mock_config.get_current_provider.return_value = "bedrock_nova"
             mock_config.get_provider_config.return_value = {
@@ -290,7 +290,7 @@ class TestCreateLLMProvider:
             }
             mock_config_class.return_value = mock_config
 
-            with patch("main.BedrockAnthropicProvider") as mock_provider_class:
+            with patch("src.llm.providers.BedrockAnthropicProvider") as mock_provider_class:
                 mock_provider = Mock()
                 mock_provider_class.return_value = mock_provider
 
@@ -302,7 +302,7 @@ class TestCreateLLMProvider:
 
     def test_create_llm_provider_unsupported(self, temp_config_file):
         """Test creating unsupported provider raises ValueError."""
-        with patch("main.ConfigManager") as mock_config_class:
+        with patch("src.config.ConfigManager") as mock_config_class:
             mock_config = Mock()
             mock_config.get_current_provider.return_value = "unsupported"
             mock_config.get_provider_config.return_value = {}
@@ -317,7 +317,7 @@ class TestCreateLLMProvider:
         self, temp_config_file, mock_openai_client
     ):
         """Test creating provider with default (None) provider name."""
-        with patch("main.ConfigManager") as mock_config_class:
+        with patch("src.config.ConfigManager") as mock_config_class:
             mock_config = Mock()
             mock_config.get_current_provider.return_value = "openai"
             mock_config.get_provider_config.return_value = {
@@ -327,7 +327,7 @@ class TestCreateLLMProvider:
             }
             mock_config_class.return_value = mock_config
 
-            with patch("main.OpenAIProvider") as mock_provider_class:
+            with patch("src.llm.providers.OpenAIProvider") as mock_provider_class:
                 mock_provider = Mock()
                 mock_provider_class.return_value = mock_provider
 
@@ -344,7 +344,7 @@ class TestCreateLLMProvider:
         """Test create_llm_provider uses global config_manager."""
         # This test verifies that the function uses the global config_manager instance
         # when no provider is specified and it falls back to the current provider
-        with patch("main.config_manager") as mock_global_config:
+        with patch("src.config.manager.config_manager") as mock_global_config:
             mock_global_config.get_current_provider.return_value = "openai"
             mock_global_config.get_provider_config.return_value = {
                 "model": "gpt-4",
@@ -352,7 +352,7 @@ class TestCreateLLMProvider:
                 "max_tokens": 2000,
             }
 
-            with patch("main.OpenAIProvider") as mock_provider_class:
+            with patch("src.llm.providers.OpenAIProvider") as mock_provider_class:
                 mock_provider = Mock()
                 mock_provider_class.return_value = mock_provider
 

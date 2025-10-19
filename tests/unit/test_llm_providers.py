@@ -8,7 +8,7 @@ import pytest
 from unittest.mock import Mock, patch, MagicMock
 import boto3
 
-from main import (
+from src.llm import (
     LLMProvider,
     OpenAIProvider,
     AnthropicProvider,
@@ -44,7 +44,7 @@ class TestOpenAIProvider:
             "max_tokens": 2000,
         }
 
-        with patch("main.OpenAI", return_value=mock_openai_client):
+        with patch("src.llm.providers.OpenAI", return_value=mock_openai_client):
             provider = OpenAIProvider(config)
 
             assert provider.config == config
@@ -56,7 +56,7 @@ class TestOpenAIProvider:
         """Test OpenAIProvider initialization with default values."""
         config = {"api_key": "test-key"}
 
-        with patch("main.OpenAI", return_value=mock_openai_client):
+        with patch("src.llm.providers.OpenAI", return_value=mock_openai_client):
             provider = OpenAIProvider(config)
 
             assert provider.model == "gpt-4"  # Default from mock
@@ -68,14 +68,40 @@ class TestOpenAIProvider:
         config = {"api_key": "test-key", "model": "gpt-4"}
         messages = [{"role": "user", "content": "test message"}]
 
-        with patch("main.OpenAI", return_value=mock_openai_client):
+        with patch("src.llm.providers.OpenAI", return_value=mock_openai_client):
             provider = OpenAIProvider(config)
             result = provider.generate_response(messages)
 
             assert result == "Mock OpenAI response"
             mock_openai_client.chat.completions.create.assert_called_once_with(
-                model="gpt-4", messages=messages, temperature=0.1, max_tokens=2000
+                model="gpt-4",
+                messages=messages,
+                temperature=0.1,
+                max_completion_tokens=2000,
             )
+
+    def test_openai_provider_generate_response_temperature_fallback(
+        self, mock_openai_client
+    ):
+        """Test OpenAI response generation with temperature fallback."""
+        config = {"api_key": "test-key", "model": "gpt-5-nano", "temperature": 0.1}
+        messages = [{"role": "user", "content": "test message"}]
+
+        # Mock temperature error followed by success
+        def side_effect(*args, **kwargs):
+            if "temperature" in kwargs:
+                raise Exception("temperature does not support 0.1 with this model")
+            return Mock(choices=[Mock(message=Mock(content="Mock OpenAI response"))])
+
+        mock_openai_client.chat.completions.create.side_effect = side_effect
+
+        with patch("src.llm.providers.OpenAI", return_value=mock_openai_client):
+            provider = OpenAIProvider(config)
+            result = provider.generate_response(messages)
+
+            assert result == "Mock OpenAI response"
+            # Should be called twice: once with temperature, once without
+            assert mock_openai_client.chat.completions.create.call_count == 2
 
     def test_openai_provider_generate_response_api_error(self, mock_openai_client):
         """Test OpenAI API error handling."""
@@ -85,7 +111,7 @@ class TestOpenAIProvider:
         # Mock API error
         mock_openai_client.chat.completions.create.side_effect = Exception("API Error")
 
-        with patch("main.OpenAI", return_value=mock_openai_client):
+        with patch("src.llm.providers.OpenAI", return_value=mock_openai_client):
             provider = OpenAIProvider(config)
 
             with pytest.raises(Exception, match="OpenAI API error: API Error"):
@@ -104,7 +130,9 @@ class TestAnthropicProvider:
             "max_tokens": 2000,
         }
 
-        with patch("main.anthropic.Anthropic", return_value=mock_anthropic_client):
+        with patch(
+            "src.llm.providers.anthropic.Anthropic", return_value=mock_anthropic_client
+        ):
             provider = AnthropicProvider(config)
 
             assert provider.config == config
@@ -116,7 +144,9 @@ class TestAnthropicProvider:
         """Test AnthropicProvider initialization with default values."""
         config = {"api_key": "test-key"}
 
-        with patch("main.anthropic.Anthropic", return_value=mock_anthropic_client):
+        with patch(
+            "src.llm.providers.anthropic.Anthropic", return_value=mock_anthropic_client
+        ):
             provider = AnthropicProvider(config)
 
             assert provider.model == "claude-3-5-sonnet-20241022"
@@ -131,7 +161,9 @@ class TestAnthropicProvider:
             {"role": "user", "content": "test message"},
         ]
 
-        with patch("main.anthropic.Anthropic", return_value=mock_anthropic_client):
+        with patch(
+            "src.llm.providers.anthropic.Anthropic", return_value=mock_anthropic_client
+        ):
             provider = AnthropicProvider(config)
             result = provider.generate_response(messages)
 
@@ -151,7 +183,9 @@ class TestAnthropicProvider:
         config = {"api_key": "test-key", "model": "claude-3"}
         messages = [{"role": "user", "content": "test message"}]
 
-        with patch("main.anthropic.Anthropic", return_value=mock_anthropic_client):
+        with patch(
+            "src.llm.providers.anthropic.Anthropic", return_value=mock_anthropic_client
+        ):
             provider = AnthropicProvider(config)
             result = provider.generate_response(messages)
 
@@ -175,7 +209,9 @@ class TestAnthropicProvider:
             {"role": "user", "content": "Second user message"},
         ]
 
-        with patch("main.anthropic.Anthropic", return_value=mock_anthropic_client):
+        with patch(
+            "src.llm.providers.anthropic.Anthropic", return_value=mock_anthropic_client
+        ):
             provider = AnthropicProvider(config)
             result = provider.generate_response(messages)
 
@@ -203,7 +239,9 @@ class TestAnthropicProvider:
         # Mock API error
         mock_anthropic_client.messages.create.side_effect = Exception("API Error")
 
-        with patch("main.anthropic.Anthropic", return_value=mock_anthropic_client):
+        with patch(
+            "src.llm.providers.anthropic.Anthropic", return_value=mock_anthropic_client
+        ):
             provider = AnthropicProvider(config)
 
             with pytest.raises(Exception, match="Anthropic API error: API Error"):
@@ -221,7 +259,7 @@ class TestBedrockAnthropicProvider:
             "max_tokens": 2000,
         }
 
-        with patch("main.boto3.client", return_value=mock_bedrock_client):
+        with patch("src.llm.providers.boto3.client", return_value=mock_bedrock_client):
             with patch.dict("os.environ", {"AWS_REGION": "us-east-1"}):
                 provider = BedrockAnthropicProvider(config)
 
@@ -235,7 +273,7 @@ class TestBedrockAnthropicProvider:
         """Test BedrockAnthropicProvider initialization with default values."""
         config = {}
 
-        with patch("main.boto3.client", return_value=mock_bedrock_client):
+        with patch("src.llm.providers.boto3.client", return_value=mock_bedrock_client):
             with patch.dict("os.environ", {"AWS_REGION": "us-east-1"}):
                 provider = BedrockAnthropicProvider(config)
 
@@ -251,7 +289,7 @@ class TestBedrockAnthropicProvider:
         config = {}
 
         with patch(
-            "main.boto3.client", return_value=mock_bedrock_client
+            "src.llm.providers.boto3.client", return_value=mock_bedrock_client
         ) as mock_client:
             with patch.dict("os.environ", {"AWS_REGION": "us-west-2"}):
                 provider = BedrockAnthropicProvider(config)
@@ -281,7 +319,7 @@ class TestBedrockAnthropicProvider:
         ).encode()
         mock_bedrock_client.invoke_model.return_value = mock_response
 
-        with patch("main.boto3.client", return_value=mock_bedrock_client):
+        with patch("src.llm.providers.boto3.client", return_value=mock_bedrock_client):
             provider = BedrockAnthropicProvider(config)
             result = provider.generate_response(messages)
 
@@ -317,7 +355,7 @@ class TestBedrockAnthropicProvider:
         ).encode()
         mock_bedrock_client.invoke_model.return_value = mock_response
 
-        with patch("main.boto3.client", return_value=mock_bedrock_client):
+        with patch("src.llm.providers.boto3.client", return_value=mock_bedrock_client):
             provider = BedrockAnthropicProvider(config)
             result = provider.generate_response(messages)
 
@@ -349,7 +387,7 @@ class TestBedrockAnthropicProvider:
         ).encode()
         mock_bedrock_client.invoke_model.return_value = mock_response
 
-        with patch("main.boto3.client", return_value=mock_bedrock_client):
+        with patch("src.llm.providers.boto3.client", return_value=mock_bedrock_client):
             provider = BedrockAnthropicProvider(config)
             result = provider.generate_response(messages)
 
@@ -377,7 +415,7 @@ class TestBedrockAnthropicProvider:
         ).encode()
         mock_bedrock_client.invoke_model.return_value = mock_response
 
-        with patch("main.boto3.client", return_value=mock_bedrock_client):
+        with patch("src.llm.providers.boto3.client", return_value=mock_bedrock_client):
             provider = BedrockAnthropicProvider(config)
             result = provider.generate_response(messages)
 
@@ -404,7 +442,7 @@ class TestBedrockAnthropicProvider:
         # Mock API error
         mock_bedrock_client.invoke_model.side_effect = Exception("Bedrock API Error")
 
-        with patch("main.boto3.client", return_value=mock_bedrock_client):
+        with patch("src.llm.providers.boto3.client", return_value=mock_bedrock_client):
             provider = BedrockAnthropicProvider(config)
 
             with pytest.raises(Exception, match="Bedrock API error: Bedrock API Error"):
@@ -426,7 +464,7 @@ class TestBedrockAnthropicProvider:
         mock_response["body"].read.return_value = b"invalid json"
         mock_bedrock_client.invoke_model.return_value = mock_response
 
-        with patch("main.boto3.client", return_value=mock_bedrock_client):
+        with patch("src.llm.providers.boto3.client", return_value=mock_bedrock_client):
             provider = BedrockAnthropicProvider(config)
 
             with pytest.raises(Exception, match="Bedrock API error:"):

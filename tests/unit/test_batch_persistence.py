@@ -9,12 +9,8 @@ from unittest.mock import Mock, patch, MagicMock
 from pathlib import Path
 from datetime import datetime
 
-from main import (
-    BatchStatePersistenceService,
-    BatchConfiguration,
-    BatchEvaluation,
-    BatchStatus,
-)
+from src.batch import BatchStatePersistenceService
+from src.models import BatchConfiguration, BatchEvaluation, BatchStatus
 
 
 class TestBatchStatePersistenceService:

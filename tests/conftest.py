@@ -17,12 +17,7 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from main import (
-    LLMProvider,
-    OpenAIProvider,
-    AnthropicProvider,
-    BedrockAnthropicProvider,
-    ConfigManager,
+from src.models import (
     EvaluationStep,
     CriterionEvaluation,
     DisclosureEvaluationResult,
@@ -38,10 +33,21 @@ from main import (
     BatchProgress,
     BatchResult,
     DocumentInput,
+)
+from src.llm import (
+    LLMProvider,
+    OpenAIProvider,
+    AnthropicProvider,
+    BedrockAnthropicProvider,
+)
+from src.config import ConfigManager
+from src.evaluators import (
     StepEvaluator,
     CriterionEvaluator,
     ResultAggregator,
     DisclosureEvaluator,
+)
+from src.batch import (
     DocumentDiscoveryService,
     BatchStatePersistenceService,
     ParallelDocumentProcessingService,

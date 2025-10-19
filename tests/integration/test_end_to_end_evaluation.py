@@ -8,14 +8,9 @@ import pytest
 from unittest.mock import Mock, patch, MagicMock
 from datetime import datetime
 
-from main import (
-    DisclosureEvaluator,
-    evaluate_disclosure,
-    format_structured_output,
-    DisclosureEvaluationResult,
-    CriterionEvaluation,
-    EvaluationStep,
-)
+from src.evaluators import DisclosureEvaluator, evaluate_disclosure
+from src.utils import format_structured_output
+from src.models import DisclosureEvaluationResult, CriterionEvaluation, EvaluationStep
 
 
 class TestEndToEndEvaluation:

@@ -7,7 +7,8 @@ import pytest
 from unittest.mock import Mock, patch, MagicMock
 from pathlib import Path
 
-from main import DocumentDiscoveryService, DocumentInput, BatchConfiguration
+from src.batch import DocumentDiscoveryService
+from src.models import DocumentInput, BatchConfiguration
 
 
 class TestDocumentDiscoveryService:

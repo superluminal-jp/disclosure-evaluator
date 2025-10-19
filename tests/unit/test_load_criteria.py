@@ -8,7 +8,7 @@ import pytest
 from unittest.mock import Mock, patch, mock_open
 from pathlib import Path
 
-from main import load_criteria
+from src.utils import load_criteria
 
 
 class TestLoadCriteria:

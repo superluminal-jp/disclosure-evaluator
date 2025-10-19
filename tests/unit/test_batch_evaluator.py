@@ -9,8 +9,8 @@ from unittest.mock import Mock, patch, MagicMock
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from main import (
-    BatchEvaluator,
+from src.batch import BatchEvaluator
+from src.models import (
     BatchConfiguration,
     DocumentInput,
     BatchDocument,

@@ -6,7 +6,9 @@ Tests lines 700-825: StepEvaluator class including parsing logic
 import pytest
 from unittest.mock import Mock, patch, MagicMock
 
-from main import StepEvaluator, EvaluationStep, ConfigManager
+from src.evaluators import StepEvaluator
+from src.models import EvaluationStep
+from src.config import ConfigManager
 
 
 class TestStepEvaluator:
@@ -17,7 +19,9 @@ class TestStepEvaluator:
         mock_llm_provider = Mock()
         correlation_id = "test_correlation_001"
 
-        with patch("main.logging.getLogger") as mock_get_logger:
+        with patch(
+            "src.evaluators.step_evaluator.logging.getLogger"
+        ) as mock_get_logger:
             mock_logger = Mock()
             mock_get_logger.return_value = mock_logger
 
@@ -41,11 +45,13 @@ class TestStepEvaluator:
             "output_text": "開示判断",
         }
 
-        with patch("main.logging.getLogger") as mock_get_logger:
+        with patch(
+            "src.evaluators.step_evaluator.logging.getLogger"
+        ) as mock_get_logger:
             mock_logger = Mock()
             mock_get_logger.return_value = mock_logger
 
-            with patch("main.config_manager") as mock_config:
+            with patch("src.config.manager.config_manager") as mock_config:
                 mock_config.get_prompt.return_value = "システムプロンプト"
 
                 evaluator = StepEvaluator(mock_llm_provider, "test_correlation")
@@ -80,11 +86,13 @@ class TestStepEvaluator:
         step_name = "テストステップ"
         context = {"input_text": "テスト入力"}
 
-        with patch("main.logging.getLogger") as mock_get_logger:
+        with patch(
+            "src.evaluators.step_evaluator.logging.getLogger"
+        ) as mock_get_logger:
             mock_logger = Mock()
             mock_get_logger.return_value = mock_logger
 
-            with patch("main.config_manager") as mock_config:
+            with patch("src.config.manager.config_manager") as mock_config:
                 mock_config.get_prompt.return_value = "システムプロンプト"
 
                 evaluator = StepEvaluator(mock_llm_provider, "test_correlation")
@@ -113,7 +121,7 @@ class TestStepEvaluator:
             "結果: 該当\n理由: テスト理由",
         ]
 
-        with patch("main.logging.getLogger"):
+        with patch("src.evaluators.step_evaluator.logging.getLogger"):
             evaluator = StepEvaluator(mock_llm_provider, "test_correlation")
 
             for response in test_cases:
@@ -134,7 +142,7 @@ class TestStepEvaluator:
             "結果: 非該当\n理由: テスト理由",
         ]
 
-        with patch("main.logging.getLogger"):
+        with patch("src.evaluators.step_evaluator.logging.getLogger"):
             evaluator = StepEvaluator(mock_llm_provider, "test_correlation")
 
             for response in test_cases:
@@ -153,7 +161,7 @@ class TestStepEvaluator:
             "結果: YES\n説明: テスト説明",
         ]
 
-        with patch("main.logging.getLogger"):
+        with patch("src.evaluators.step_evaluator.logging.getLogger"):
             evaluator = StepEvaluator(mock_llm_provider, "test_correlation")
 
             for response in test_cases:
@@ -170,7 +178,7 @@ class TestStepEvaluator:
         # Response without clear reasoning pattern
         response = "これは長い説明文で、明確な理由が含まれています。"
 
-        with patch("main.logging.getLogger"):
+        with patch("src.evaluators.step_evaluator.logging.getLogger"):
             evaluator = StepEvaluator(mock_llm_provider, "test_correlation")
             result = evaluator._parse_step_response(response, "テストステップ")
 
@@ -190,7 +198,7 @@ class TestStepEvaluator:
         # Another header
         別の短い行"""
 
-        with patch("main.logging.getLogger"):
+        with patch("src.evaluators.step_evaluator.logging.getLogger"):
             evaluator = StepEvaluator(mock_llm_provider, "test_correlation")
             result = evaluator._parse_step_response(response, "テストステップ")
 
@@ -205,7 +213,9 @@ class TestStepEvaluator:
         """Test exception handling in response parsing."""
         mock_llm_provider = Mock()
 
-        with patch("main.logging.getLogger") as mock_get_logger:
+        with patch(
+            "src.evaluators.step_evaluator.logging.getLogger"
+        ) as mock_get_logger:
             mock_logger = Mock()
             mock_get_logger.return_value = mock_logger
 
@@ -225,7 +235,7 @@ class TestStepEvaluator:
         """Test parsing empty response."""
         mock_llm_provider = Mock()
 
-        with patch("main.logging.getLogger"):
+        with patch("src.evaluators.step_evaluator.logging.getLogger"):
             evaluator = StepEvaluator(mock_llm_provider, "test_correlation")
             result = evaluator._parse_step_response("", "テストステップ")
 
@@ -238,7 +248,7 @@ class TestStepEvaluator:
 
         response = "  結果: YES  \n  理由: テスト理由  "
 
-        with patch("main.logging.getLogger"):
+        with patch("src.evaluators.step_evaluator.logging.getLogger"):
             evaluator = StepEvaluator(mock_llm_provider, "test_correlation")
             result = evaluator._parse_step_response(response, "テストステップ")
 
@@ -252,7 +262,7 @@ class TestStepEvaluator:
         # Response with multiple patterns - should use the first one found
         response = "結果: NO\n理由: 最初の理由\n結果: YES\n理由: 二番目の理由"
 
-        with patch("main.logging.getLogger"):
+        with patch("src.evaluators.step_evaluator.logging.getLogger"):
             evaluator = StepEvaluator(mock_llm_provider, "test_correlation")
             result = evaluator._parse_step_response(response, "テストステップ")
 
@@ -270,7 +280,7 @@ class TestStepEvaluator:
             "結果: No\n理由: テスト理由",
         ]
 
-        with patch("main.logging.getLogger"):
+        with patch("src.evaluators.step_evaluator.logging.getLogger"):
             evaluator = StepEvaluator(mock_llm_provider, "test_correlation")
 
             for i, response in enumerate(test_cases):
@@ -290,7 +300,7 @@ class TestStepEvaluator:
             ("結果: 非該当\n理由: テスト理由", "NO"),
         ]
 
-        with patch("main.logging.getLogger"):
+        with patch("src.evaluators.step_evaluator.logging.getLogger"):
             evaluator = StepEvaluator(mock_llm_provider, "test_correlation")
 
             for response, expected_result in test_cases:
@@ -304,7 +314,7 @@ class TestStepEvaluator:
 
         response = "結果: YES\n理由 テスト理由"  # Missing colon after "理由"
 
-        with patch("main.logging.getLogger"):
+        with patch("src.evaluators.step_evaluator.logging.getLogger"):
             evaluator = StepEvaluator(mock_llm_provider, "test_correlation")
             result = evaluator._parse_step_response(response, "テストステップ")
 
@@ -319,7 +329,7 @@ class TestStepEvaluator:
 理由: この文書には個人情報が含まれており、情報公開法第5条第1号の不開示事由に該当する可能性が高い。
 詳細な分析により、氏名、住所等の個人識別情報が明確に記載されているため、開示することにより個人の権利利益を害するおそれがあると判断される。"""
 
-        with patch("main.logging.getLogger"):
+        with patch("src.evaluators.step_evaluator.logging.getLogger"):
             evaluator = StepEvaluator(mock_llm_provider, "test_correlation")
             result = evaluator._parse_step_response(response, "テストステップ")
 

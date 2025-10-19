@@ -7,14 +7,8 @@ import pytest
 from unittest.mock import Mock, patch, MagicMock
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from main import (
-    DisclosureEvaluator,
-    CriterionEvaluator,
-    ResultAggregator,
-    CriterionEvaluation,
-    EvaluationStep,
-    DisclosureEvaluationResult,
-)
+from src.evaluators import DisclosureEvaluator, CriterionEvaluator, ResultAggregator
+from src.models import CriterionEvaluation, EvaluationStep, DisclosureEvaluationResult
 
 
 class TestDisclosureEvaluator:
@@ -22,11 +16,11 @@ class TestDisclosureEvaluator:
 
     def test_disclosure_evaluator_init_openai(self, mock_env_vars, mock_openai_client):
         """Test DisclosureEvaluator initialization with OpenAI provider."""
-        with patch("main.create_llm_provider") as mock_create_provider:
+        with patch("src.llm.factory.create_llm_provider") as mock_create_provider:
             mock_provider = Mock()
             mock_create_provider.return_value = mock_provider
 
-            with patch("main.ConfigManager") as mock_config_class:
+            with patch("src.config.manager.ConfigManager") as mock_config_class:
                 mock_config = Mock()
                 mock_config.get_current_provider.return_value = "openai"
                 mock_config.get_provider_config.return_value = {"api_key": "test-key"}
@@ -47,11 +41,11 @@ class TestDisclosureEvaluator:
         self, mock_env_vars, mock_anthropic_client
     ):
         """Test DisclosureEvaluator initialization with Anthropic provider."""
-        with patch("main.create_llm_provider") as mock_create_provider:
+        with patch("src.llm.factory.create_llm_provider") as mock_create_provider:
             mock_provider = Mock()
             mock_create_provider.return_value = mock_provider
 
-            with patch("main.ConfigManager") as mock_config_class:
+            with patch("src.config.manager.ConfigManager") as mock_config_class:
                 mock_config = Mock()
                 mock_config.get_current_provider.return_value = "anthropic"
                 mock_config.get_provider_config.return_value = {"api_key": "test-key"}
@@ -69,11 +63,11 @@ class TestDisclosureEvaluator:
         self, mock_env_vars, mock_bedrock_client
     ):
         """Test DisclosureEvaluator initialization with Bedrock provider."""
-        with patch("main.create_llm_provider") as mock_create_provider:
+        with patch("src.llm.factory.create_llm_provider") as mock_create_provider:
             mock_provider = Mock()
             mock_create_provider.return_value = mock_provider
 
-            with patch("main.ConfigManager") as mock_config_class:
+            with patch("src.config.manager.ConfigManager") as mock_config_class:
                 mock_config = Mock()
                 mock_config.get_current_provider.return_value = "bedrock"
                 mock_config.get_provider_config.return_value = {}
@@ -90,7 +84,7 @@ class TestDisclosureEvaluator:
     def test_disclosure_evaluator_init_missing_openai_key(self, mock_anthropic_client):
         """Test DisclosureEvaluator initialization with missing OpenAI API key."""
         with patch.dict("os.environ", {}, clear=True):
-            with patch("main.ConfigManager") as mock_config_class:
+            with patch("src.config.manager.ConfigManager") as mock_config_class:
                 mock_config = Mock()
                 mock_config.get_current_provider.return_value = "openai"
                 mock_config.get_provider_config.return_value = {}
@@ -104,7 +98,7 @@ class TestDisclosureEvaluator:
     def test_disclosure_evaluator_init_missing_anthropic_key(self, mock_openai_client):
         """Test DisclosureEvaluator initialization with missing Anthropic API key."""
         with patch.dict("os.environ", {}, clear=True):
-            with patch("main.ConfigManager") as mock_config_class:
+            with patch("src.config.manager.ConfigManager") as mock_config_class:
                 mock_config = Mock()
                 mock_config.get_current_provider.return_value = "anthropic"
                 mock_config.get_provider_config.return_value = {}
@@ -120,11 +114,11 @@ class TestDisclosureEvaluator:
         self, mock_env_vars, mock_openai_client
     ):
         """Test DisclosureEvaluator initialization with default provider."""
-        with patch("main.create_llm_provider") as mock_create_provider:
+        with patch("src.llm.factory.create_llm_provider") as mock_create_provider:
             mock_provider = Mock()
             mock_create_provider.return_value = mock_provider
 
-            with patch("main.ConfigManager") as mock_config_class:
+            with patch("src.config.manager.ConfigManager") as mock_config_class:
                 mock_config = Mock()
                 mock_config.get_current_provider.return_value = "openai"
                 mock_config.get_provider_config.return_value = {"api_key": "test-key"}
@@ -167,7 +161,9 @@ class TestDisclosureEvaluator:
             mock_criterion_evaluation
         )
 
-        with patch("main.create_llm_provider", return_value=mock_llm_provider):
+        with patch(
+            "src.llm.factory.create_llm_provider", return_value=mock_llm_provider
+        ):
             with patch("main.ConfigManager"):
                 with patch(
                     "main.CriterionEvaluator", return_value=mock_criterion_evaluator
@@ -203,7 +199,9 @@ class TestDisclosureEvaluator:
             "Evaluation failed"
         )
 
-        with patch("main.create_llm_provider", return_value=mock_llm_provider):
+        with patch(
+            "src.llm.factory.create_llm_provider", return_value=mock_llm_provider
+        ):
             with patch("main.ConfigManager"):
                 with patch(
                     "main.CriterionEvaluator", return_value=mock_criterion_evaluator
@@ -262,8 +260,10 @@ class TestDisclosureEvaluator:
             ),
         ]
 
-        with patch("main.create_llm_provider", return_value=mock_llm_provider):
-            with patch("main.ConfigManager") as mock_config_class:
+        with patch(
+            "src.llm.factory.create_llm_provider", return_value=mock_llm_provider
+        ):
+            with patch("src.config.manager.ConfigManager") as mock_config_class:
                 mock_config = Mock()
                 mock_config.get_evaluation_config.return_value = {
                     "parallel": {"enabled": True, "max_workers": 3}
@@ -322,8 +322,10 @@ class TestDisclosureEvaluator:
         criteria = [{"id": "article_5_1", "name": "テスト", "article": "テスト条項"}]
         eval_context = {"input_text": "テスト入力"}
 
-        with patch("main.create_llm_provider", return_value=mock_llm_provider):
-            with patch("main.ConfigManager") as mock_config_class:
+        with patch(
+            "src.llm.factory.create_llm_provider", return_value=mock_llm_provider
+        ):
+            with patch("src.config.manager.ConfigManager") as mock_config_class:
                 mock_config = Mock()
                 mock_config.get_evaluation_config.return_value = {
                     "parallel": {"enabled": False}
@@ -356,8 +358,10 @@ class TestDisclosureEvaluator:
         criteria = [{"id": "article_5_1", "name": "テスト", "article": "テスト条項"}]
         eval_context = {"input_text": "テスト入力"}
 
-        with patch("main.create_llm_provider", return_value=mock_llm_provider):
-            with patch("main.ConfigManager") as mock_config_class:
+        with patch(
+            "src.llm.factory.create_llm_provider", return_value=mock_llm_provider
+        ):
+            with patch("src.config.manager.ConfigManager") as mock_config_class:
                 mock_config = Mock()
                 mock_config.get_evaluation_config.return_value = {
                     "parallel": {"enabled": True, "max_workers": 3}
@@ -432,7 +436,9 @@ class TestDisclosureEvaluator:
             ),
         ]
 
-        with patch("main.create_llm_provider", return_value=mock_llm_provider):
+        with patch(
+            "src.llm.factory.create_llm_provider", return_value=mock_llm_provider
+        ):
             with patch("main.ConfigManager"):
                 with patch("main.CriterionEvaluator") as mock_criterion_class:
                     mock_criterion_evaluator = Mock()
@@ -484,7 +490,9 @@ class TestDisclosureEvaluator:
             Exception("Second criterion failed"),
         ]
 
-        with patch("main.create_llm_provider", return_value=mock_llm_provider):
+        with patch(
+            "src.llm.factory.create_llm_provider", return_value=mock_llm_provider
+        ):
             with patch("main.ConfigManager"):
                 with patch(
                     "main.CriterionEvaluator", return_value=mock_criterion_evaluator
@@ -539,7 +547,9 @@ class TestDisclosureEvaluator:
             evaluation_timestamp="2025-01-01T12:00:00",
         )
 
-        with patch("main.create_llm_provider", return_value=mock_llm_provider):
+        with patch(
+            "src.llm.factory.create_llm_provider", return_value=mock_llm_provider
+        ):
             with patch("main.ConfigManager"):
                 with patch("main.CriterionEvaluator"):
                     with patch("main.ResultAggregator") as mock_aggregator_class:
@@ -569,7 +579,9 @@ class TestDisclosureEvaluator:
         context = "テストコンテキスト"
         output_text = "テスト出力"
 
-        with patch("main.create_llm_provider", return_value=mock_llm_provider):
+        with patch(
+            "src.llm.factory.create_llm_provider", return_value=mock_llm_provider
+        ):
             with patch("main.ConfigManager"):
                 with patch("main.CriterionEvaluator"):
                     with patch("main.ResultAggregator"):

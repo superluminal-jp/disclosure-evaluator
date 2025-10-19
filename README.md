@@ -90,14 +90,25 @@ pip install -r requirements.txt
 
 ### 必要な依存関係
 
-| パッケージ      | バージョン | 用途                 |
-| --------------- | ---------- | -------------------- |
-| `pydantic`      | >=2.0.0    | データバリデーション |
-| `python-dotenv` | >=1.0.0    | 環境変数管理         |
-| `openai`        | >=1.0.0    | OpenAI API           |
-| `anthropic`     | >=0.60.0   | Anthropic API        |
-| `boto3`         | >=1.39.0   | AWS Bedrock          |
-| `pytest`        | >=7.0.0    | テスト実行           |
+| パッケージ       | バージョン | 用途                 |
+| ---------------- | ---------- | -------------------- |
+| `pydantic`       | >=2.0.0    | データバリデーション |
+| `python-dotenv`  | >=1.0.0    | 環境変数管理         |
+| `openai`         | >=1.0.0    | OpenAI API           |
+| `anthropic`      | >=0.60.0   | Anthropic API        |
+| `boto3`          | >=1.39.0   | AWS Bedrock          |
+| `pytest`         | >=7.0.0    | テスト実行           |
+| `pytest-asyncio` | >=0.21.0   | 非同期テスト         |
+| `pytest-cov`     | >=4.0.0    | テストカバレッジ     |
+
+### 開発用依存関係
+
+```bash
+# 開発用パッケージのインストール
+pip install pytest-xdist  # 並列テスト実行
+pip install black          # コードフォーマッター
+pip install flake8         # リンター
+```
 
 > **注意**: 現在のシステムはテキストファイルのみをサポートしています。PDF、DOCX、XLSX、CSV ファイルを処理する場合は、事前にテキスト形式に変換してください。
 
@@ -189,6 +200,22 @@ python main.py <input_text> [context] [output_text] [--format json|summary] [--p
 
 > **ヒント**: `context`引数は評価の文脈を提供し、AI の判断精度を向上させます。
 
+#### サンプル
+
+```bash
+# 基本的な単一文書評価
+python main.py "Personal information: John Doe" --format summary
+
+# 特定のプロバイダーを指定
+python main.py "Personal information: John Doe" --format summary --provider openai
+python main.py "Personal information: John Doe" --format summary --provider anthropic
+python main.py "Personal information: John Doe" --format summary --provider bedrock
+python main.py "Personal information: John Doe" --format summary --provider bedrock_nova
+
+# コンテキスト付き評価
+python main.py "Personal information: John Doe" "Legal review for disclosure" "doc_001" --format json
+```
+
 ### バッチ処理
 
 #### サンプル文書の一括処理
@@ -202,6 +229,30 @@ python main.py --batch --documents "personal_info_sample.txt,corporate_info_samp
 
 # 並列処理数の調整
 python main.py --batch --folder sample_documents --max-workers 10
+
+# 再帰的ディレクトリ検索（デフォルト: true）
+python main.py --batch --folder documents --recursive
+
+# ファイルタイプフィルタリング
+python main.py --batch --folder documents --file-types "text/plain"
+
+# 除外パターンの指定
+python main.py --batch --folder documents --exclude "*.tmp,*.bak"
+
+# ファイルサイズ制限
+python main.py --batch --folder documents --file-size-limit 10485760  # 10MB
+
+# タイムアウト設定
+python main.py --batch --folder documents --timeout 600  # 10分
+
+# リトライ回数設定
+python main.py --batch --folder documents --retry-attempts 5
+
+# 全文書に共通のコンテキストを追加
+python main.py --batch --folder documents --context "Legal review for disclosure"
+
+# 複数出力形式の指定
+python main.py --batch --folder documents --output-formats "json,summary,csv"
 ```
 
 #### バッチ処理の管理
@@ -210,11 +261,19 @@ python main.py --batch --folder sample_documents --max-workers 10
 # バッチ処理の状況確認
 python main.py --batch-status <batch_id>
 
-# バッチ処理の結果取得
+# バッチ処理の結果取得（複数形式対応）
 python main.py --batch-results <batch_id> --format json
+python main.py --batch-results <batch_id> --format summary
+python main.py --batch-results <batch_id> --format csv
+
+# 中断されたバッチ処理の再開
+python main.py --resume-batch <batch_id>
 
 # 失敗した文書の再処理
 python main.py --retry-documents <batch_id> <document_id1,document_id2>
+
+# ヘルプの表示
+python main.py --help
 ```
 
 ## 評価基準
@@ -542,14 +601,45 @@ pytest --lf
 
 ```
 disclosure-evaluator/
-├── main.py                   # メイン評価システム
+├── main.py                   # CLI エントリーポイント
 ├── config.json              # システム設定
 ├── requirements.txt          # 依存関係
+├── src/                      # モジュラーソースコード
+│   ├── __init__.py
+│   ├── batch/                # バッチ処理モジュール
+│   │   ├── evaluator.py       # バッチ評価エンジン
+│   │   └── services/          # バッチ処理サービス
+│   │       ├── discovery.py   # 文書発見サービス
+│   │       ├── persistence.py # 状態永続化
+│   │       └── processing.py   # 並列処理
+│   ├── cli/                  # CLI コマンド
+│   │   └── commands.py        # コマンドハンドラー
+│   ├── config/               # 設定管理
+│   │   ├── manager.py        # 設定マネージャー
+│   │   └── prompts.py        # プロンプト管理
+│   ├── evaluators/           # 評価エンジン
+│   │   ├── disclosure_evaluator.py  # メイン評価ロジック
+│   │   ├── criterion_evaluator.py   # 基準評価
+│   │   ├── step_evaluator.py        # 段階的評価
+│   │   └── result_aggregator.py     # 結果集約
+│   ├── llm/                  # LLM プロバイダー
+│   │   ├── factory.py        # プロバイダーファクトリー
+│   │   └── providers.py      # 各プロバイダー実装
+│   ├── models/               # データモデル
+│   │   ├── batch.py          # バッチ処理モデル
+│   │   └── evaluation.py     # 評価結果モデル
+│   └── utils/                # ユーティリティ
+│       ├── criteria.py      # 基準管理
+│       ├── formatters.py    # 出力フォーマッター
+│       └── logging.py       # ログ管理
 ├── criteria/
 │   └── disclosure_evaluation_criteria.json  # 評価基準
 ├── sample_documents/         # サンプル文書（テキスト形式）
 ├── tests/                    # テストスイート
 ├── htmlcov/                  # カバレッジレポート
+├── batch_state/              # バッチ処理状態
+├── logs/                     # ログファイル
+├── outputs/                  # 評価結果出力
 └── venv/                    # 仮想環境
 ```
 
@@ -557,21 +647,61 @@ disclosure-evaluator/
 
 ### アーキテクチャ概要
 
-- **ConfigManager**: 設定管理
-- **LLMProvider**: LLM プロバイダーの抽象化
-- **DisclosureEvaluator**: メイン評価ロジック
-- **BatchProcessor**: バッチ処理管理
-- **EvaluationCriteria**: 評価基準の管理
+システムはモジュラー設計により、各機能が独立したコンポーネントとして実装されています：
+
+#### コアコンポーネント
+
+- **ConfigManager** (`src/config/manager.py`): 設定管理と環境変数処理
+- **DisclosureEvaluator** (`src/evaluators/disclosure_evaluator.py`): メイン評価ロジック
+- **BatchEvaluator** (`src/batch/evaluator.py`): バッチ処理管理
+- **LLMFactory** (`src/llm/factory.py`): LLM プロバイダーの動的生成
+
+#### 評価エンジン
+
+- **CriterionEvaluator** (`src/evaluators/criterion_evaluator.py`): 個別基準の評価
+- **StepEvaluator** (`src/evaluators/step_evaluator.py`): 段階的評価プロセス
+- **ResultAggregator** (`src/evaluators/result_aggregator.py`): 結果の集約とスコアリング
+
+#### バッチ処理
+
+- **DocumentDiscovery** (`src/batch/services/discovery.py`): 文書の発見とフィルタリング
+- **BatchPersistence** (`src/batch/services/persistence.py`): バッチ状態の永続化
+- **ParallelProcessor** (`src/batch/services/processing.py`): 並列処理管理
+
+#### LLM プロバイダー
+
+- **OpenAIProvider** (`src/llm/providers.py`): OpenAI API 統合
+- **AnthropicProvider** (`src/llm/providers.py`): Anthropic API 統合
+- **BedrockProvider** (`src/llm/providers.py`): AWS Bedrock 統合
 
 ### 主要コンポーネント
 
-#### LLMProvider クラス
+#### LLMProvider 抽象クラス
 
 ```python
 class LLMProvider:
     def generate_response(self, messages: List[Dict[str, str]]) -> str:
         """LLMからの応答を生成"""
         raise NotImplementedError
+```
+
+#### BatchEvaluator クラス
+
+```python
+class BatchEvaluator:
+    def __init__(self, config_manager: ConfigManager):
+        """バッチ評価エンジンの初期化"""
+
+    def process_batch(self, configuration: BatchConfiguration) -> BatchResult:
+        """バッチ処理の実行"""
+```
+
+#### DisclosureEvaluator クラス
+
+```python
+class DisclosureEvaluator:
+    def evaluate(self, document: str, context: str = "") -> EvaluationResult:
+        """単一文書の評価実行"""
 ```
 
 #### 評価プロセス
@@ -586,6 +716,8 @@ class LLMProvider:
 
 #### 新しい LLM プロバイダーの追加
 
+1. **プロバイダークラスの実装** (`src/llm/providers.py`):
+
 ```python
 class CustomProvider(LLMProvider):
     def __init__(self, config: Dict[str, Any]):
@@ -597,9 +729,127 @@ class CustomProvider(LLMProvider):
         pass
 ```
 
+2. **ファクトリーの更新** (`src/llm/factory.py`):
+
+```python
+def create_provider(provider_name: str, config: Dict[str, Any]) -> LLMProvider:
+    if provider_name == "custom":
+        return CustomProvider(config)
+    # 既存のプロバイダー...
+```
+
+3. **設定ファイルの更新** (`config.json`):
+
+```json
+{
+  "llm": {
+    "provider": "custom",
+    "custom": {
+      "model": "your-model",
+      "temperature": 0.1,
+      "max_tokens": 2000,
+      "timeout": 30
+    }
+  }
+}
+```
+
 #### 評価基準のカスタマイズ
 
 `criteria/disclosure_evaluation_criteria.json`を編集して、評価基準をカスタマイズできます。
+
+#### 新しい評価基準の追加
+
+1. **基準定義の追加** (`criteria/disclosure_evaluation_criteria.json`):
+
+```json
+{
+  "criteria": {
+    "article_5_7": {
+      "name": "新たな不開示事由",
+      "description": "カスタム不開示事由の説明",
+      "steps": [
+        {
+          "step": "該当性の確認",
+          "description": "ステップの説明"
+        }
+      ]
+    }
+  }
+}
+```
+
+2. **評価ロジックの実装** (`src/evaluators/criterion_evaluator.py`):
+
+```python
+def evaluate_custom_criterion(self, document: str, context: str) -> CriterionResult:
+    # カスタム評価ロジックの実装
+    pass
+```
+
+#### バッチ処理のカスタマイズ
+
+1. **新しい文書発見ロジック** (`src/batch/services/discovery.py`):
+
+```python
+class CustomDocumentDiscovery(DocumentDiscovery):
+    def discover_documents(self, path: Path) -> List[DocumentInput]:
+        # カスタム文書発見ロジック
+        pass
+```
+
+2. **カスタム並列処理** (`src/batch/services/processing.py`):
+
+```python
+class CustomParallelProcessor(ParallelProcessor):
+    def process_document(self, document: DocumentInput) -> EvaluationResult:
+        # カスタム処理ロジック
+        pass
+```
+
+### 開発ワークフロー
+
+#### モジュラー開発のベストプラクティス
+
+1. **コンポーネントの独立性**: 各モジュールは独立してテスト・開発可能
+2. **インターフェースの一貫性**: 共通のインターフェースを維持
+3. **設定の分離**: 設定は`config.json`で一元管理
+4. **ログの構造化**: 全コンポーネントで統一されたログ形式
+
+#### 開発環境のセットアップ
+
+```bash
+# 開発用仮想環境の作成
+python -m venv venv-dev
+source venv-dev/bin/activate  # Linux/Mac
+# または
+venv-dev\Scripts\activate     # Windows
+
+# 開発用依存関係のインストール
+pip install -r requirements.txt
+pip install pytest-xdist black flake8 mypy
+
+# コードフォーマット
+black src/ tests/
+
+# リンター実行
+flake8 src/ tests/
+
+# 型チェック
+mypy src/
+
+# テスト実行
+pytest tests/ -v --cov=src
+```
+
+#### 新機能の追加手順
+
+1. **機能の設計**: どのモジュールに属するかを決定
+2. **インターフェースの定義**: 共通インターフェースの実装
+3. **単体テストの作成**: テストファースト開発
+4. **実装**: 機能の実装
+5. **統合テスト**: 他コンポーネントとの連携確認
+6. **ドキュメント更新**: README とコードコメントの更新
 
 ## 出力形式
 
