@@ -1,5 +1,9 @@
 # 情報公開法評価システム (Disclosure Evaluator)
 
+[![Python Version](https://img.shields.io/badge/python-3.12+-blue.svg)](https://python.org)
+[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![Code Style](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
+
 ## 概要
 
 情報公開法評価システムは、情報公開法第 5 条に基づく 6 つの不開示事由を体系的に評価するための AI 駆動システムです。大規模言語モデル（LLM）を活用し、行政機関が保有する情報の開示・非開示判断を支援します。
@@ -23,9 +27,11 @@
 
 ### 対応 LLM プロバイダー
 
-- **OpenAI**: GPT-4、GPT-5-nano
-- **Anthropic**: Claude Sonnet 4
-- **AWS Bedrock**: Claude Sonnet 4、Amazon Nova Premier
+| プロバイダー    | モデル                               | 特徴                 |
+| --------------- | ------------------------------------ | -------------------- |
+| **OpenAI**      | GPT-4, GPT-5-nano                    | 高精度な法的判断     |
+| **Anthropic**   | Claude Sonnet 4                      | 専門的な法的分析     |
+| **AWS Bedrock** | Claude Sonnet 4, Amazon Nova Premier | エンタープライズ対応 |
 
 ### バッチ処理機能
 
@@ -33,6 +39,7 @@
 - 特定ファイルの選択的処理
 - 処理状況の追跡と管理
 - 失敗した文書の再処理
+- **対応ファイル形式**: テキストファイル（.txt）のみ
 
 ### 並列処理サポート
 
@@ -40,6 +47,12 @@
 - タイムアウト設定（デフォルト 300 秒）
 - リトライ機能（最大 3 回）
 - ファイルサイズ制限（デフォルト 50MB）
+
+### ファイル形式の制限
+
+- **対応形式**: テキストファイル（.txt）のみ
+- **非対応形式**: PDF、DOCX、XLSX、CSV
+- **事前変換**: 他の形式を使用する場合はテキスト形式への変換が必要
 
 ## インストール
 
@@ -60,10 +73,13 @@ cd disclosure-evaluator
 2. **仮想環境の作成とアクティベート**
 
 ```bash
+# 仮想環境の作成
 python -m venv venv
+
+# アクティベート
 source venv/bin/activate  # Linux/Mac
 # または
-venv\Scripts\activate  # Windows
+venv\Scripts\activate       # Windows
 ```
 
 3. **依存関係のインストール**
@@ -74,12 +90,16 @@ pip install -r requirements.txt
 
 ### 必要な依存関係
 
-- pydantic>=2.0.0
-- python-dotenv>=1.0.0
-- openai>=1.0.0
-- anthropic>=0.60.0
-- boto3>=1.39.0
-- pytest>=7.0.0（テスト用）
+| パッケージ      | バージョン | 用途                 |
+| --------------- | ---------- | -------------------- |
+| `pydantic`      | >=2.0.0    | データバリデーション |
+| `python-dotenv` | >=1.0.0    | 環境変数管理         |
+| `openai`        | >=1.0.0    | OpenAI API           |
+| `anthropic`     | >=0.60.0   | Anthropic API        |
+| `boto3`         | >=1.39.0   | AWS Bedrock          |
+| `pytest`        | >=7.0.0    | テスト実行           |
+
+> **注意**: 現在のシステムはテキストファイルのみをサポートしています。PDF、DOCX、XLSX、CSV ファイルを処理する場合は、事前にテキスト形式に変換してください。
 
 ## 設定
 
@@ -129,38 +149,62 @@ AWS_REGION=us-east-1
 }
 ```
 
+### 主要設定項目
+
+| 設定項目                          | 説明                      | デフォルト値 |
+| --------------------------------- | ------------------------- | ------------ |
+| `llm.provider`                    | 使用する LLM プロバイダー | `anthropic`  |
+| `evaluation.parallel.max_workers` | 並列処理数                | `30`         |
+| `evaluation.parallel.timeout`     | タイムアウト時間（秒）    | `300`        |
+| `llm.temperature`                 | モデルの創造性            | `0.1`        |
+| `llm.max_tokens`                  | 最大トークン数            | `2000`       |
+
 ## 使用方法
+
+このツールは、行政機関が保有する情報が情報公開法第 5 条の不開示事由に該当するかどうかを事前に評価するために使用します。ユーザーは、開示・非開示の判断に迷う文書について、AI による専門的な評価を受けることで、適切な判断の参考とすることができます。
+
+### 主な使用シナリオ
+
+- **情報公開請求への対応**: 請求された文書が不開示事由に該当するかどうかの事前評価
+- **文書管理**: 新規作成・受領した文書の開示可能性の事前確認
+- **法務チェック**: 文書の開示判断における法的根拠の確認
+- **リスク評価**: 不適切な開示によるリスクの事前把握
+- **教育・研修**: 職員の情報公開法理解の向上
 
 ### 単一文書の評価
 
+#### 引数の説明
+
 ```bash
-# 基本的な使用方法
-python main.py "評価対象の文書内容" "追加の文脈情報" "出力ファイル名"
-
-# 出力形式を指定
-python main.py "文書内容" "文脈" "出力" --format json
-
-# LLMプロバイダーを指定
-python main.py "文書内容" "文脈" "出力" --provider anthropic
+python main.py <input_text> [context] [output_text] [--format json|summary] [--provider openai|anthropic|bedrock|bedrock_nova]
 ```
+
+| 引数          | 説明                                                        | 必須       |
+| ------------- | ----------------------------------------------------------- | ---------- |
+| `input_text`  | 評価したい文書の内容                                        | 必須       |
+| `context`     | 文書の開示目的・用途（オプション）                          | オプション |
+| `output_text` | 評価結果の識別子（オプション）                              | オプション |
+| `--format`    | 出力形式（json\|summary、デフォルト: json）                 | オプション |
+| `--provider`  | AI プロバイダー（openai\|anthropic\|bedrock\|bedrock_nova） | オプション |
+
+> **ヒント**: `context`引数は評価の文脈を提供し、AI の判断精度を向上させます。
 
 ### バッチ処理
 
+#### サンプル文書の一括処理
+
 ```bash
-# フォルダ内の全文書を処理
-python main.py --batch --folder /path/to/documents
+# 全サンプル文書の一括評価（個人情報、法人情報、国家安全保障、内部審議等の各不開示事由に該当する具体的な文書）
+python main.py --batch --folder sample_documents --max-workers 5
 
-# 特定のファイルを処理
-python main.py --batch --documents file1.txt,file2.pdf,file3.docx
+# 特定の文書タイプの評価（個人情報保護・法人等情報保護の不開示事由に該当する文書）
+python main.py --batch --documents "personal_info_sample.txt,corporate_info_sample.txt"
 
-# 並列ワーカー数を指定
-python main.py --batch --folder /path/to/documents --max-workers 10
-
-# ファイルサイズ制限を設定
-python main.py --batch --folder /path/to/documents --file-size-limit 10000000
+# 並列処理数の調整
+python main.py --batch --folder sample_documents --max-workers 10
 ```
 
-### バッチ処理の管理
+#### バッチ処理の管理
 
 ```bash
 # バッチ処理の状況確認
@@ -177,48 +221,320 @@ python main.py --retry-documents <batch_id> <document_id1,document_id2>
 
 ### 情報公開法第 5 条の 6 つの不開示事由
 
-1. **個人情報保護**（第 5 条第 1 号）
-
-   - 個人に関する情報の識別可能性
-   - 個人の権利利益への影響
-   - 開示例外要件の適用
-
-2. **法人等情報保護**（第 5 条第 2 号）
-
-   - 法人等の競争上の地位への影響
-   - 正当な利益の保護
-   - 任意提供情報の条件
-
-3. **国家安全保障**（第 5 条第 3 号）
-
-   - 国の安全への影響
-   - 国際関係への影響
-   - 外交交渉への影響
-
-4. **公共の安全と秩序**（第 5 条第 4 号）
-
-   - 犯罪の予防・鎮圧・捜査への影響
-   - 公訴の維持・刑の執行への影響
-   - 公共の安全と秩序の維持
-
-5. **内部審議等**（第 5 条第 5 号）
-
-   - 率直な意見交換の保護
-   - 意思決定の中立性
-   - 国民の混乱防止
-
-6. **行政運営等**（第 5 条第 6 号）
-   - 監査・検査・取締り等への影響
-   - 契約・交渉・争訟への影響
-   - 調査研究・人事管理への影響
+| 事由                    | 条文           | 評価ポイント                                   |
+| ----------------------- | -------------- | ---------------------------------------------- |
+| **1. 個人情報保護**     | 第 5 条第 1 号 | 個人識別可能性、権利利益への影響、開示例外要件 |
+| **2. 法人等情報保護**   | 第 5 条第 2 号 | 競争上の地位への影響、正当な利益の保護         |
+| **3. 国家安全保障**     | 第 5 条第 3 号 | 国の安全、国際関係、外交交渉への影響           |
+| **4. 公共の安全と秩序** | 第 5 条第 4 号 | 犯罪予防・捜査、公訴維持、公共安全への影響     |
+| **5. 内部審議等**       | 第 5 条第 5 号 | 率直な意見交換の保護、意思決定の中立性         |
+| **6. 行政運営等**       | 第 5 条第 6 号 | 監査・検査、契約・交渉、調査研究への影響       |
 
 ### スコアリング基準（1-5 スケール）
 
-- **1**: 明確に不開示事由に該当し、不開示が必要
-- **2**: 不開示事由に該当し、不開示が適切
-- **3**: 不開示事由の該当性があり、慎重な検討が必要
-- **4**: 不開示事由の該当性は低く、開示を検討可能
-- **5**: 不開示事由に該当せず、開示が適切
+| スコア | 意味                                       | 判断                 |
+| ------ | ------------------------------------------ | -------------------- |
+| **1**  | 明確に不開示事由に該当し、不開示が必要     | 不開示               |
+| **2**  | 不開示事由に該当し、不開示が適切           | 不開示の可能性が高い |
+| **3**  | 不開示事由の該当性があり、慎重な検討が必要 | 慎重な検討が必要     |
+| **4**  | 不開示事由の該当性は低く、開示を検討可能   | 開示の可能性が高い   |
+| **5**  | 不開示事由に該当せず、開示が適切           | 開示                 |
+
+## テスト
+
+### テスト構造
+
+このプロジェクトは包括的なテストスイートを提供し、単体テスト、統合テスト、エンドツーエンドテストを含みます。
+
+```
+tests/
+├── conftest.py              # 共有フィクスチャとモック
+├── fixtures/                # テスト用データ
+│   ├── criteria_test.json
+│   ├── mock_responses.json
+│   └── sample_documents/
+├── unit/                    # 単体テスト
+│   ├── test_batch_evaluator.py
+│   ├── test_batch_persistence.py
+│   ├── test_cli.py
+│   ├── test_config_manager.py
+│   ├── test_criterion_evaluator.py
+│   ├── test_disclosure_evaluator.py
+│   ├── test_document_discovery.py
+│   ├── test_llm_providers.py
+│   ├── test_load_criteria.py
+│   ├── test_models.py
+│   ├── test_parallel_processing.py
+│   ├── test_result_aggregator.py
+│   └── test_step_evaluator.py
+└── integration/             # 統合テスト
+    ├── test_batch_processing.py
+    ├── test_batch_processing_simple.py
+    ├── test_cli_commands.py
+    └── test_end_to_end_evaluation.py
+```
+
+### テスト実行
+
+#### 全テストの実行
+
+```bash
+# 全テストを実行
+pytest
+
+# 詳細出力でテスト実行
+pytest -v
+
+# カバレッジレポート付きでテスト実行
+pytest --cov=main --cov-report=html
+
+# 特定のテストファイルを実行
+pytest tests/unit/test_disclosure_evaluator.py
+
+# 特定のテストクラスを実行
+pytest tests/unit/test_disclosure_evaluator.py::TestDisclosureEvaluator
+```
+
+#### テストカテゴリ別実行
+
+```bash
+# 単体テストのみ実行
+pytest tests/unit/
+
+# 統合テストのみ実行
+pytest tests/integration/
+
+# 特定のパターンでテスト実行
+pytest -k "test_batch"
+```
+
+#### 並列テスト実行
+
+```bash
+# pytest-xdistを使用した並列実行（インストールが必要）
+pip install pytest-xdist
+pytest -n auto  # CPUコア数に応じて並列実行
+```
+
+### テストカバレッジ
+
+#### カバレッジレポートの生成
+
+```bash
+# HTMLカバレッジレポートを生成
+pytest --cov=main --cov-report=html
+
+# コンソールにカバレッジサマリーを表示
+pytest --cov=main --cov-report=term-missing
+
+# カバレッジ閾値を設定
+pytest --cov=main --cov-fail-under=80
+```
+
+#### カバレッジレポートの確認
+
+HTML レポートは`htmlcov/`ディレクトリに生成され、ブラウザで確認できます：
+
+```bash
+open htmlcov/index.html  # macOS
+xdg-open htmlcov/index.html  # Linux
+```
+
+### テストデータとフィクスチャ
+
+#### 共有フィクスチャ（conftest.py）
+
+- **mock_openai_client**: OpenAI API のモック
+- **mock_anthropic_client**: Anthropic API のモック
+- **mock_bedrock_client**: AWS Bedrock API のモック
+- **sample_criteria**: 評価基準のテストデータ
+- **sample_documents_dir**: サンプル文書ディレクトリ
+- **test_batch_configuration**: バッチ処理設定
+
+#### テスト用データ
+
+```bash
+# テスト用サンプル文書
+tests/fixtures/sample_documents/
+├── doc1.txt
+├── doc2.txt
+└── doc3.txt
+
+# モックレスポンス
+tests/fixtures/mock_responses.json
+
+# テスト用評価基準
+tests/fixtures/criteria_test.json
+```
+
+### テストの種類
+
+#### 1. 単体テスト（Unit Tests）
+
+各コンポーネントの個別機能をテスト：
+
+- **LLM プロバイダー**: OpenAI、Anthropic、AWS Bedrock
+- **評価エンジン**: 段階的評価ロジック
+- **バッチ処理**: 並列処理、状態管理
+- **設定管理**: 設定ファイルの読み込み
+- **CLI**: コマンドライン引数の処理
+
+#### 2. 統合テスト（Integration Tests）
+
+コンポーネント間の連携をテスト：
+
+- **バッチ処理ワークフロー**: 作成から完了まで
+- **エンドツーエンド評価**: 入力から出力まで
+- **CLI コマンド**: 実際のコマンド実行
+
+#### 3. モックとスタブ
+
+外部依存関係をモック化：
+
+```python
+# LLM プロバイダーのモック
+@pytest.fixture
+def mock_openai_client():
+    mock_client = Mock()
+    mock_response = Mock()
+    mock_response.choices = [Mock()]
+    mock_response.choices[0].message.content = "Mock response"
+    mock_client.chat.completions.create.return_value = mock_response
+    return mock_client
+```
+
+### テスト設定
+
+#### pytest.ini の設定
+
+```ini
+[tool:pytest]
+testpaths = tests
+python_files = test_*.py
+python_classes = Test*
+python_functions = test_*
+addopts =
+    -v
+    --tb=short
+    --strict-markers
+    --disable-warnings
+markers =
+    unit: Unit tests
+    integration: Integration tests
+    slow: Slow running tests
+```
+
+#### 環境変数の設定
+
+テスト用の環境変数は自動的にモックされます：
+
+```python
+# テスト用APIキーが自動設定
+OPENAI_API_KEY=test_key
+ANTHROPIC_API_KEY=test_key
+AWS_ACCESS_KEY_ID=test_key
+```
+
+### 継続的インテグレーション
+
+#### GitHub Actions でのテスト実行
+
+```yaml
+name: Tests
+on: [push, pull_request]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+      - name: Run tests
+        run: |
+          pytest --cov=main --cov-report=xml
+      - name: Upload coverage
+        uses: codecov/codecov-action@v3
+```
+
+### テストのベストプラクティス
+
+#### 1. テストの命名規則
+
+```python
+def test_<component>_<action>_<expected_result>():
+    """Test description."""
+    pass
+
+# 例
+def test_disclosure_evaluator_init_openai():
+    """Test DisclosureEvaluator initialization with OpenAI provider."""
+    pass
+```
+
+#### 2. テストの独立性
+
+各テストは独立して実行可能：
+
+```python
+def test_something(self, mock_client):
+    """Test that doesn't depend on other tests."""
+    # テストロジック
+    pass
+```
+
+#### 3. アサーションの明確性
+
+```python
+# 良い例
+assert result.score == 2
+assert result.decision == "non_disclosure"
+assert "個人情報" in result.reasoning
+
+# 悪い例
+assert result
+```
+
+### トラブルシューティング
+
+#### よくあるテストエラー
+
+1. **ImportError**: パスの問題
+
+   ```bash
+   # 解決方法
+   export PYTHONPATH="${PYTHONPATH}:$(pwd)"
+   ```
+
+2. **API Key Error**: 環境変数の問題
+
+   ```bash
+   # 解決方法
+   export OPENAI_API_KEY=test_key
+   ```
+
+3. **Timeout Error**: 長時間実行テスト
+   ```bash
+   # 解決方法
+   pytest --timeout=300
+   ```
+
+#### テストのデバッグ
+
+```bash
+# 特定のテストを詳細出力で実行
+pytest -v -s tests/unit/test_disclosure_evaluator.py::TestDisclosureEvaluator::test_specific_method
+
+# デバッガーでテスト実行
+pytest --pdb tests/unit/test_disclosure_evaluator.py
+
+# 失敗したテストのみ再実行
+pytest --lf
+```
 
 ## 開発者向け情報
 
@@ -231,8 +547,13 @@ disclosure-evaluator/
 ├── requirements.txt          # 依存関係
 ├── criteria/
 │   └── disclosure_evaluation_criteria.json  # 評価基準
+├── sample_documents/         # サンプル文書（テキスト形式）
+├── tests/                    # テストスイート
+├── htmlcov/                  # カバレッジレポート
 └── venv/                    # 仮想環境
 ```
+
+**注意**: システムはテキストファイル（.txt）のみをサポートしています。他の形式の文書を使用する場合は、事前にテキスト形式に変換してください。
 
 ### アーキテクチャ概要
 
@@ -284,52 +605,268 @@ class CustomProvider(LLMProvider):
 
 ### JSON 形式
 
+#### 個人情報を含む文書の評価結果例
+
 ```json
 {
-  "document_id": "doc_001",
+  "document_id": "resident_record_2024_001",
   "evaluation_results": {
     "article_5_1": {
       "score": 2,
-      "reasoning": "個人情報保護規定に該当する可能性が高い",
+      "reasoning": "個人情報保護規定に該当する可能性が高い。氏名、住所、生年月日等の個人識別情報が含まれており、開示例外要件に該当しない限り不開示が適切",
       "steps": [
         {
           "step": "個人に関する情報か",
           "result": "YES",
-          "reasoning": "氏名、住所等の個人識別情報が含まれている"
+          "reasoning": "氏名、住所、生年月日等の個人識別情報が明確に含まれている"
+        },
+        {
+          "step": "開示例外要件に該当するか",
+          "result": "NO",
+          "reasoning": "公務員の職務遂行上の必要性や公的活動の透明性確保の観点から開示が求められる特別な事情は認められない"
+        }
+      ]
+    },
+    "article_5_2": {
+      "score": 5,
+      "reasoning": "法人等情報保護規定には該当しない",
+      "steps": [
+        {
+          "step": "法人等の競争上の地位に関する情報か",
+          "result": "NO",
+          "reasoning": "個人情報であり、法人等の競争上の地位に関する情報ではない"
         }
       ]
     }
   },
   "overall_decision": "不開示",
-  "confidence": 0.85
+  "confidence": 0.92,
+  "context": "住民基本台帳に基づく人口統計資料の作成"
+}
+```
+
+#### 企業情報を含む文書の評価結果例
+
+```json
+{
+  "document_id": "public_works_bid_2024_003",
+  "evaluation_results": {
+    "article_5_2": {
+      "score": 3,
+      "reasoning": "法人等情報保護規定の該当性について慎重な検討が必要。技術仕様の一部は競争上の地位に影響する可能性があるが、公共事業の透明性確保の観点も重要",
+      "steps": [
+        {
+          "step": "法人等の競争上の地位に関する情報か",
+          "result": "YES",
+          "reasoning": "技術仕様、価格情報等の競争上重要な情報が含まれている"
+        },
+        {
+          "step": "開示により正当な利益が害されるか",
+          "result": "PARTIAL",
+          "reasoning": "一部の技術的詳細は開示により競争上の不利益が生じる可能性があるが、入札の透明性確保の観点から開示が求められる部分もある"
+        }
+      ]
+    }
+  },
+  "overall_decision": "部分開示",
+  "confidence": 0.78,
+  "context": "公共事業入札に関する審査資料"
+}
+```
+
+#### 外交文書の評価結果例
+
+```json
+{
+  "document_id": "diplomatic_meeting_2024_012",
+  "evaluation_results": {
+    "article_5_3": {
+      "score": 1,
+      "reasoning": "国家安全保障規定に明確に該当し、不開示が適切。外交交渉の内容は国際関係に重大な影響を与える可能性がある",
+      "steps": [
+        {
+          "step": "国の安全に関する情報か",
+          "result": "YES",
+          "reasoning": "外交交渉の詳細内容は国家安全保障に直接関わる情報である"
+        },
+        {
+          "step": "開示により国際関係に影響するか",
+          "result": "YES",
+          "reasoning": "外交交渉の内容の開示は相手国との信頼関係に重大な影響を与える可能性が高い"
+        }
+      ]
+    }
+  },
+  "overall_decision": "不開示",
+  "confidence": 0.95,
+  "context": "外交政策の検討資料"
 }
 ```
 
 ### サマリー形式
 
+#### 個人情報を含む文書の評価サマリー
+
 ```
 === 評価結果サマリー ===
-文書ID: doc_001
+文書ID: resident_record_2024_001
+文書種別: 住民基本台帳に基づく人口統計資料
 総合判断: 不開示
-信頼度: 85%
+信頼度: 92%
 
-【個人情報保護】
+【個人情報保護（第5条第1号）】
 スコア: 2/5
 判断: 不開示の可能性が高い
-理由: 個人識別情報が含まれ、開示例外に該当しない
+理由: 氏名、住所、生年月日等の個人識別情報が含まれており、
+      開示例外要件に該当しない限り不開示が適切
+
+【法人等情報保護（第5条第2号）】
+スコア: 5/5
+判断: 該当しない
+理由: 個人情報であり、法人等の競争上の地位に関する情報ではない
+
+【国家安全保障（第5条第3号）】
+スコア: 5/5
+判断: 該当しない
+理由: 住民統計情報であり、国家安全保障に関する情報ではない
+```
+
+#### 企業情報を含む文書の評価サマリー
+
+```
+=== 評価結果サマリー ===
+文書ID: public_works_bid_2024_003
+文書種別: 公共事業入札に関する審査資料
+総合判断: 部分開示
+信頼度: 78%
+
+【法人等情報保護（第5条第2号）】
+スコア: 3/5
+判断: 慎重な検討が必要
+理由: 技術仕様の一部は競争上の地位に影響する可能性があるが、
+      公共事業の透明性確保の観点も重要
+
+【内部審議等（第5条第5号）】
+スコア: 4/5
+判断: 開示を検討可能
+理由: 入札審査の透明性確保の観点から開示が求められる
+```
+
+#### 外交文書の評価サマリー
+
+```
+=== 評価結果サマリー ===
+文書ID: diplomatic_meeting_2024_012
+文書種別: 外交交渉の議事録
+総合判断: 不開示
+信頼度: 95%
+
+【国家安全保障（第5条第3号）】
+スコア: 1/5
+判断: 明確に不開示事由に該当
+理由: 外交交渉の内容は国際関係に重大な影響を与える可能性があり、
+      国家安全保障上不開示が適切
+
+【内部審議等（第5条第5号）】
+スコア: 2/5
+判断: 不開示の可能性が高い
+理由: 外交交渉の詳細内容は率直な意見交換の保護が必要
 ```
 
 ### CSV 形式
 
+#### 個人情報を含む文書の評価結果
+
 ```csv
-document_id,criterion,score,decision,confidence
-doc_001,article_5_1,2,non_disclosure,0.85
-doc_001,article_5_2,5,disclosure,0.90
+document_id,document_type,criterion,score,decision,confidence,reasoning
+resident_record_2024_001,住民基本台帳統計,article_5_1,2,non_disclosure,0.92,個人識別情報が含まれ開示例外に該当しない
+resident_record_2024_001,住民基本台帳統計,article_5_2,5,disclosure,0.90,個人情報であり法人等情報ではない
+resident_record_2024_001,住民基本台帳統計,article_5_3,5,disclosure,0.95,住民統計情報であり国家安全保障情報ではない
 ```
+
+#### 企業情報を含む文書の評価結果
+
+```csv
+document_id,document_type,criterion,score,decision,confidence,reasoning
+public_works_bid_2024_003,公共事業入札審査,article_5_2,3,partial_disclosure,0.78,技術仕様の一部は競争上重要だが透明性確保も重要
+public_works_bid_2024_003,公共事業入札審査,article_5_5,4,disclosure,0.85,入札審査の透明性確保の観点から開示が求められる
+```
+
+#### 外交文書の評価結果
+
+```csv
+document_id,document_type,criterion,score,decision,confidence,reasoning
+diplomatic_meeting_2024_012,外交交渉議事録,article_5_3,1,non_disclosure,0.95,外交交渉内容は国際関係に重大影響
+diplomatic_meeting_2024_012,外交交渉議事録,article_5_5,2,non_disclosure,0.88,外交交渉の詳細は率直な意見交換保護が必要
+```
+
+## ファイル形式の対応
+
+### 対応ファイル形式
+
+**現在サポートされている形式**:
+
+- **テキストファイル（.txt）**: 完全対応
+
+**現在サポートされていない形式**:
+
+- **PDF（.pdf）**: 対応していません
+- **Word 文書（.docx）**: 対応していません
+- **Excel（.xlsx）**: 対応していません
+- **CSV（.csv）**: 対応していません
+
+### 他のファイル形式を使用する場合
+
+#### 1. 事前変換が必要
+
+他のファイル形式を使用する場合は、事前にテキスト形式に変換してください：
+
+```bash
+# PDFをテキストに変換
+pdftotext document.pdf document.txt
+
+# Word文書をテキストに変換
+# Microsoft Wordで「名前を付けて保存」→「テキスト形式」を選択
+
+# ExcelをCSVに変換後、テキストエディタで開く
+# Excelで「名前を付けて保存」→「CSV形式」を選択
+```
+
+#### 2. 変換ツールの使用例
+
+```bash
+# PDF変換ツール（pdftotext）のインストール
+# Ubuntu/Debian
+sudo apt-get install poppler-utils
+
+# macOS
+brew install poppler
+
+# 変換実行
+pdftotext input.pdf output.txt
+python main.py --batch --documents output.txt
+```
+
+#### 3. 将来的な対応予定
+
+システムの今後のバージョンでは以下の形式への対応を予定しています：
+
+- PDF 文書の直接読み込み
+- Word 文書の直接読み込み
+- Excel 文書の直接読み込み
+- CSV 文書の直接読み込み
 
 ## トラブルシューティング
 
 ### よくある問題
+
+#### ファイル形式エラー
+
+```
+Error: Unsupported file format
+```
+
+**解決方法**: テキストファイル（.txt）のみがサポートされています。他の形式の場合は事前にテキスト形式に変換してください。
 
 #### API キーの設定エラー
 
