@@ -1,9 +1,5 @@
 # 情報公開法評価システム (Disclosure Evaluator)
 
-[![Python Version](https://img.shields.io/badge/python-3.12+-blue.svg)](https://python.org)
-[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![Code Style](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
-
 ## 概要
 
 情報公開法評価システムは、情報公開法第 5 条に基づく 6 つの不開示事由を体系的に評価するための AI 駆動システムです。大規模言語モデル（LLM）を活用し、行政機関が保有する情報の開示・非開示判断を支援します。
@@ -128,8 +124,10 @@ ANTHROPIC_API_KEY=your_anthropic_api_key_here
 # AWS Bedrock使用の場合
 AWS_ACCESS_KEY_ID=your_aws_access_key_id
 AWS_SECRET_ACCESS_KEY=your_aws_secret_access_key
-AWS_REGION=us-east-1
+AWS_REGION=ap-northeast-1
 ```
+
+> **注意**: AWS Bedrock を使用する場合は、モデル ID ではなく推論プロファイル（inference profile）の ARN を使用する必要があります。例: `jp.anthropic.claude-haiku-4-5-20251001-v1:0`
 
 ### config.json の設定
 
@@ -142,9 +140,9 @@ AWS_REGION=us-east-1
     "version": "2.0.0"
   },
   "llm": {
-    "provider": "anthropic",
-    "anthropic": {
-      "model": "claude-sonnet-4-5-20250929",
+    "provider": "bedrock",
+    "bedrock": {
+      "model": "jp.anthropic.claude-haiku-4-5-20251001-v1:0",
       "temperature": 0.1,
       "max_tokens": 2000,
       "timeout": 30

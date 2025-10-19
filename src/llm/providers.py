@@ -115,14 +115,15 @@ class BedrockAnthropicProvider(LLMProvider):
     def __init__(self, config: Dict[str, Any]):
         super().__init__(config)
         self.model_id = config.get(
-            "model", "global.anthropic.claude-sonnet-4-20250514-v1:0"
+            "model",
+            "jp.anthropic.claude-haiku-4-5-20251001-v1:0",
         )
         self.temperature = config.get("temperature", 0.1)
         self.max_tokens = config.get("max_tokens", 2000)
 
         # Initialize Bedrock client
         # AWS credentials are automatically handled by boto3 from environment
-        region = os.getenv("AWS_REGION", "us-east-1")
+        region = os.getenv("AWS_REGION", "ap-northeast-1")
         self.bedrock_client = boto3.client("bedrock-runtime", region_name=region)
 
     def generate_response(self, messages: List[Dict[str, str]]) -> str:
